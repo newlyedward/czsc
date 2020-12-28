@@ -26,7 +26,7 @@ def has_gap(k1, k2, min_gap=0.002):
 
 def get_potential_xd(bi_points):
     """获取潜在线段标记点
-
+    todo 标记极值点，用dataframe的shift其实速度更快
     :param bi_points: list of dict
         笔标记点
     :return: list of dict
@@ -168,24 +168,24 @@ class KlineAnalyze:
 
     def _update_kline_new(self):
         """更新去除包含关系的K线序列"""
-        if len(self.kline_new) < 4:
+        if len(self.kline_new) < 4:     # todo 初始化2根，最后一根不确定，但是会删除，可以接接着处理
             for x in self.kline_raw[:4]:
                 self.kline_new.append(dict(x))
 
         # 新K线只会对最后一个去除包含关系K线的结果产生影响
-        self.kline_new = self.kline_new[:-2]
-        if len(self.kline_new) <= 4:
+        self.kline_new = self.kline_new[:-2]  # 包含关系增量从倒数第3根开始处理，后面用的>,其实是直接从最后一根包含开始
+        if len(self.kline_new) <= 4:  # 开始取数据索引排序过，直接取list后面的数据
             right_k = [x for x in self.kline_raw if x['dt'] > self.kline_new[-1]['dt']]
-        else:
+        else:  # 为什么只取后面100个数据？理论上应该是新的k线进入，未处理的都要进行处理
             right_k = [x for x in self.kline_raw[-100:] if x['dt'] > self.kline_new[-1]['dt']]
 
         if len(right_k) == 0:
             return
 
         for k in right_k:
-            k = dict(k)
-            last_kn = self.kline_new[-1]
-            if self.kline_new[-1]['high'] > self.kline_new[-2]['high']:
+            k = dict(k)  # 已经是dict为什么还要用dict转换一遍
+            last_kn = self.kline_new[-1]  # 前面处理过包含关系，只用高点判断趋势
+            if self.kline_new[-1]['high'] > self.kline_new[-2]['high']:  # 前面几根可能都是包含，这里直接初始赋值down
                 direction = "up"
             else:
                 direction = "down"
@@ -194,7 +194,7 @@ class KlineAnalyze:
             cur_h, cur_l = k['high'], k['low']
             last_h, last_l = last_kn['high'], last_kn['low']
             if (cur_h <= last_h and cur_l >= last_l) or (cur_h >= last_h and cur_l <= last_l):
-                self.kline_new.pop(-1)
+                self.kline_new.pop(-1)  # 有包含关系的前一根数据被删除，这里是个技巧,todo 但会导致实际的高低点消失,只能低级别取处理
                 # 有包含关系，按方向分别处理
                 if direction == "up":
                     last_h = max(last_h, cur_h)
@@ -206,7 +206,7 @@ class KlineAnalyze:
                     raise ValueError
 
                 k.update({"high": last_h, "low": last_l})
-                # 保留红绿不变
+                # 保留红绿不变  todo 保留前一根k线的高低点在open和close当中,后续并没有用到
                 if k['open'] >= k['close']:
                     k.update({"open": last_h, "close": last_l})
                 else:
@@ -222,7 +222,7 @@ class KlineAnalyze:
         分型标记对象样例：
          {'dt': Timestamp('2020-11-26 00:00:00'),
           'fx_mark': 'd',       # 可选值：d / g
-          'fx': 138.0,
+          'fx': 138.0,          笔用bi代替
           'start_dt': Timestamp('2020-11-25 00:00:00'),
           'end_dt': Timestamp('2020-11-27 00:00:00'),
           'fx_power': 'strong', # 可选值：strong / weak
@@ -232,10 +232,10 @@ class KlineAnalyze:
         if len(self.kline_new) < 3:
             return
 
-        self.fx_list = self.fx_list[:-1]
+        self.fx_list = self.fx_list[:-1]  # 分型增量从倒数第2根开始处理
         if len(self.fx_list) == 0:
             kn = self.kline_new
-        else:
+        else:  # todo 如果已经有fx数据，取k线的前100个数据，k线数据多余100的时候会出现gap
             kn = [x for x in self.kline_new[-100:] if x['dt'] >= self.fx_list[-1]['dt']]
 
         i = 1
@@ -249,12 +249,12 @@ class KlineAnalyze:
                     "dt": k2['dt'],
                     "fx_mark": "g",
                     "fx": k2['high'],
-                    "start_dt": k1['dt'],
+                    "start_dt": k1['dt'],  # 记录分型的开始和结束时间
                     "end_dt": k3['dt'],
                     'fx_power': 'strong' if k3['close'] < k1_mid else 'weak',
                     "fx_high": k2['high'],
                     # "fx_low": k2['low'] if has_gap(k1, k2) else k1['low'],
-                    "fx_low": k1['low'],
+                    "fx_low": k1['low'],  # 顶分型，分型前一个k线的低点
                 }
                 self.fx_list.append(fx)
 
@@ -302,8 +302,8 @@ class KlineAnalyze:
         if len(self.fx_list) < 2:
             return
 
-        self.bi_list = self.bi_list[:-2]
-        if len(self.bi_list) == 0:
+        self.bi_list = self.bi_list[:-2]   # 笔增量从倒数第3根开始处理
+        if len(self.bi_list) == 0:  # 前两个分型直接加入笔
             for fx in self.fx_list[:2]:
                 bi = dict(fx)
                 bi['bi'] = bi.pop('fx')
@@ -313,11 +313,11 @@ class KlineAnalyze:
             right_fx = [x for x in self.fx_list if x['dt'] > self.bi_list[-1]['dt']]
             if self.bi_mode == "old":
                 right_kn = [x for x in self.kline_new if x['dt'] >= self.bi_list[-1]['dt']]
-            elif self.bi_mode == 'new':
+            elif self.bi_mode == 'new':  # 都是取笔端点后的k线，old取处理了包含关系的k线
                 right_kn = [x for x in self.kline_raw if x['dt'] >= self.bi_list[-1]['dt']]
             else:
                 raise ValueError
-        else:
+        else:  # todo 未处理的数据较多时，会出现gap
             right_fx = [x for x in self.fx_list[-50:] if x['dt'] > self.bi_list[-1]['dt']]
             if self.bi_mode == "old":
                 right_kn = [x for x in self.kline_new[-300:] if x['dt'] >= self.bi_list[-1]['dt']]
@@ -330,7 +330,7 @@ class KlineAnalyze:
             last_bi = self.bi_list[-1]
             bi = dict(fx)
             bi['bi'] = bi.pop('fx')
-            if last_bi['fx_mark'] == fx['fx_mark']:
+            if last_bi['fx_mark'] == fx['fx_mark']:  # 连续高低点处理，判断是否后移
                 if (last_bi['fx_mark'] == 'g' and last_bi['bi'] < bi['bi']) \
                         or (last_bi['fx_mark'] == 'd' and last_bi['bi'] > bi['bi']):
                     if self.verbose:
@@ -338,10 +338,10 @@ class KlineAnalyze:
                     self.bi_list[-1] = bi
             else:
                 kn_inside = [x for x in right_kn if last_bi['end_dt'] < x['dt'] < bi['start_dt']]
-                if len(kn_inside) <= 0:
+                if len(kn_inside) <= 0:  # 两个分型间至少有1根k线，端点有可能不是高低点
                     continue
 
-                # 确保相邻两个顶底之间不存在包含关系
+                # 确保相邻两个顶底之间不存在包含关系,两根非包含k线比较  todo ？？这里处理有问题  rbl8 2020:2.4-3.16，特别是出现大的跳空时
                 if (last_bi['fx_mark'] == 'g' and bi['fx_low'] < last_bi['fx_low']
                     and bi['fx_high'] < last_bi['fx_high']) or \
                         (last_bi['fx_mark'] == 'd' and bi['fx_high'] > last_bi['fx_high']
@@ -358,6 +358,7 @@ class KlineAnalyze:
           'fx_mark': 'g',
           'start_dt': Timestamp('2020-07-08 00:00:00'),
           'end_dt': Timestamp('2020-07-14 00:00:00'),
+          todo 可以用端点类型fx,bi,xd和value代替
           'fx_high': 187.99,
           'fx_low': 163.12,
           'xd': 187.99}
@@ -374,7 +375,7 @@ class KlineAnalyze:
             return
 
         self.xd_list = []
-        if len(self.xd_list) == 0:
+        if len(self.xd_list) == 0:     # 初始化是3笔，直接放入线段中
             for i in range(3):
                 xd = dict(self.bi_list[i])
                 xd['xd'] = xd.pop('bi')
