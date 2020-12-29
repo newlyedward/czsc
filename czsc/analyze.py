@@ -37,11 +37,11 @@ def get_potential_xd(bi_points):
     bi_g = [x for x in bi_points if x['fx_mark'] == 'g']
     for i in range(1, len(bi_d) - 1):
         d1, d2, d3 = bi_d[i - 1: i + 2]
-        if d1['bi'] > d2['bi'] < d3['bi']:
+        if d1['value'] > d2['value'] < d3['value']:
             xd_p.append(d2)
     for j in range(1, len(bi_g) - 1):
         g1, g2, g3 = bi_g[j - 1: j + 2]
-        if g1['bi'] < g2['bi'] > g3['bi']:
+        if g1['value'] < g2['value'] > g3['value']:
             xd_p.append(g2)
 
     xd_p = sorted(xd_p, key=lambda x: x['dt'], reverse=False)
@@ -227,7 +227,7 @@ class KlineAnalyze:
         分型标记对象样例：
          {'dt': Timestamp('2020-11-26 00:00:00'),
           'fx_mark': 'd',       # 可选值：d / g
-          'fx': 138.0,          笔用bi代替
+          'value': 138.0,          笔用bi代替
           'start_dt': Timestamp('2020-11-25 00:00:00'),
           'end_dt': Timestamp('2020-11-27 00:00:00'),
           'fx_power': 'strong', # 可选值：strong / weak
@@ -253,7 +253,7 @@ class KlineAnalyze:
                 fx = {
                     "dt": k2['dt'],
                     "fx_mark": "g",
-                    "fx": k2['high'],
+                    "value": k2['high'],
                     "start_dt": k1['dt'],  # 记录分型的开始和结束时间
                     "end_dt": k3['dt'],
                     'fx_power': 'strong' if k3['close'] < k1_mid else 'weak',
@@ -269,7 +269,7 @@ class KlineAnalyze:
                 fx = {
                     "dt": k2['dt'],
                     "fx_mark": "d",
-                    "fx": k2['low'],
+                    "value": k2['low'],
                     "start_dt": k1['dt'],
                     "end_dt": k3['dt'],
                     'fx_power': 'strong' if k3['close'] > k1_mid else 'weak',
@@ -294,7 +294,7 @@ class KlineAnalyze:
           'end_dt': Timestamp('2020-11-27 00:00:00'),
           'fx_high': 144.87, 往上延申最高点 避免出现笔的端点不是极值点的情况
           'fx_low': 138.0, 这个数据重复，可以用来记录笔的结束极值点的情况，一般情况根下一笔的
-          'bi': 138.0}
+          'value': 138.0}
 
          {'dt': Timestamp('2020-12-02 00:00:00'),
           'fx_mark': 'g',
@@ -302,7 +302,7 @@ class KlineAnalyze:
           'end_dt': Timestamp('2020-12-03 00:00:00'),
           'fx_high': 150.67,
           'fx_low': 141.6, 往下延申的最低点
-          'bi': 150.67}
+          'value': 150.67}
         """
         if len(self.fx_list) < 2:
             return
@@ -311,7 +311,7 @@ class KlineAnalyze:
         if len(self.bi_list) == 0:  # 前两个分型直接加入笔
             for fx in self.fx_list[:2]:
                 bi = dict(fx)
-                bi['bi'] = bi.pop('fx')
+                # bi['bi'] = bi.pop('fx')
                 self.bi_list.append(bi)
 
         if len(self.bi_list) <= 2:
@@ -334,11 +334,11 @@ class KlineAnalyze:
         for fx in right_fx:
             last_bi = self.bi_list[-1]
             bi = dict(fx)
-            bi['bi'] = bi.pop('fx')
+            # bi['bi'] = bi.pop('fx')
 
             if last_bi['fx_mark'] == bi['fx_mark']:  # 连续高低点处理，判断是否后移
-                if (last_bi['fx_mark'] == 'g' and last_bi['bi'] < bi['bi']) \
-                        or (last_bi['fx_mark'] == 'd' and last_bi['bi'] > bi['bi']):
+                if (last_bi['fx_mark'] == 'g' and last_bi['value'] < bi['value']) \
+                        or (last_bi['fx_mark'] == 'd' and last_bi['value'] > bi['value']):
                     if self.verbose:
                         print("笔标记移动：from {} to {}".format(self.bi_list[-1], bi))
                     self.bi_list[-1] = bi
@@ -346,8 +346,8 @@ class KlineAnalyze:
                 kn_inside = [x for x in right_kn if last_bi['end_dt'] < x['dt'] < bi['start_dt']]
                 if len(kn_inside) <= 0:  # 两个分型间至少有1根k线，端点有可能不是高低点
                     # 价格破坏 的例外情况要排除
-                    if (bi['fx_mark'] == 'g' and bi['bi'] < self.bi_list[-2]['bi']) \
-                            or (bi['fx_mark'] == 'd' and bi['bi'] > self.bi_list[-2]['bi']):
+                    if (bi['fx_mark'] == 'g' and bi['value'] < self.bi_list[-2]['value']) \
+                            or (bi['fx_mark'] == 'd' and bi['value'] > self.bi_list[-2]['value']):
                         continue
 
                 # 确保相邻两个顶底之间不存在包含关系,两根非包含k线比较  todo ？？这里处理有问题  rbl8 2020:2.4-3.16，特别是出现大的跳空时
@@ -370,7 +370,7 @@ class KlineAnalyze:
           todo 可以用端点类型fx,bi,xd和value代替
           'fx_high': 187.99,
           'fx_low': 163.12,
-          'xd': 187.99}
+          'value': 187.99}
 
          {'dt': Timestamp('2020-11-02 00:00:00'),
           'fx_mark': 'd',
@@ -378,7 +378,7 @@ class KlineAnalyze:
           'end_dt': Timestamp('2020-11-03 00:00:00'),
           'fx_high': 142.38,
           'fx_low': 135.0,
-          'xd': 135.0}
+          'value': 135.0}
         """
         if len(self.bi_list) < 4:
             return
@@ -387,7 +387,7 @@ class KlineAnalyze:
         if len(self.xd_list) == 0:     # 初始化是3笔，直接放入线段中
             for i in range(3):
                 xd = dict(self.bi_list[i])
-                xd['xd'] = xd.pop('bi')
+                # xd['xd'] = xd.pop('bi')
                 self.xd_list.append(xd)
 
         right_bi = [x for x in self.bi_list if x['dt'] >= self.xd_list[-1]['dt']]
@@ -395,17 +395,17 @@ class KlineAnalyze:
         xd_p = get_potential_xd(right_bi)
         for xp in xd_p:
             xd = dict(xp)
-            xd['xd'] = xd.pop('bi')
+            # xd['xd'] = xd.pop('bi')
             last_xd = self.xd_list[-1]
             if last_xd['fx_mark'] == xd['fx_mark']:
-                if (last_xd['fx_mark'] == 'd' and last_xd['xd'] > xd['xd']) \
-                        or (last_xd['fx_mark'] == 'g' and last_xd['xd'] < xd['xd']):
+                if (last_xd['fx_mark'] == 'd' and last_xd['value'] > xd['value']) \
+                        or (last_xd['fx_mark'] == 'g' and last_xd['value'] < xd['value']):
                     if self.verbose:
                         print("更新线段标记：from {} to {}".format(last_xd, xd))
                     self.xd_list[-1] = xd
             else:
-                if (last_xd['fx_mark'] == 'd' and last_xd['xd'] > xd['xd']) \
-                        or (last_xd['fx_mark'] == 'g' and last_xd['xd'] < xd['xd']):
+                if (last_xd['fx_mark'] == 'd' and last_xd['value'] > xd['value']) \
+                        or (last_xd['fx_mark'] == 'g' and last_xd['value'] < xd['value']):
                     continue
 
                 bi_inside = [x for x in right_bi if last_xd['dt'] <= x['dt'] <= xd['dt']]

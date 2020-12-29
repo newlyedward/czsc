@@ -199,7 +199,7 @@ def kline_pro(kline: List[dict],
     # ------------------------------------------------------------------------------------------------------------------
     if fx:
         fx_dts = [x['dt'] for x in fx]
-        fx_val = [x['fx'] for x in fx]
+        fx_val = [x['value'] for x in fx]
         chart_fx = Scatter()
         chart_fx.add_xaxis(fx_dts)
         chart_fx.add_yaxis(series_name="FX", y_axis=fx_val, is_selected=False,
@@ -211,7 +211,7 @@ def kline_pro(kline: List[dict],
 
     if bi:
         bi_dts = [x['dt'] for x in bi]
-        bi_val = [x['bi'] for x in bi]
+        bi_val = [x['value'] for x in bi]
         chart_bi = Line()
         chart_bi.add_xaxis(bi_dts)
         chart_bi.add_yaxis(series_name="BI", y_axis=bi_val, is_selected=True,
@@ -224,7 +224,7 @@ def kline_pro(kline: List[dict],
 
     if xd:
         xd_dts = [x['dt'] for x in xd]
-        xd_val = [x['xd'] for x in xd]
+        xd_val = [x['value'] for x in xd]
         chart_xd = Line()
         chart_xd.add_xaxis(xd_dts)
         chart_xd.add_yaxis(series_name="XD", y_axis=xd_val, is_selected=True, symbol="triangle", symbol_size=10,

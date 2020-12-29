@@ -9,17 +9,18 @@ import webbrowser
 def use_kline_analyze():
     print('=' * 100, '\n')
     print("KlineAnalyze 的使用方法：\n")
-    kline = fetch_future_day('RBL8', start='2020-01-01')
+    # kline = fetch_future_day('RBL8', start='2020-01-01')
+    kline = fetch_future_day('RBL8')
     kline.columns = ['symbol', 'open', 'high', 'low', 'close', 'position', 'price', 'vol', 'dt']
     kline.rename(columns={'code': "symbol", "date": "dt", "trade": "vol"}, inplace=True)
 
     kline = kline.loc[:, ['symbol', 'dt', 'open', 'close', 'high', 'low', 'vol']]
     ka_day = KlineAnalyze(
-        kline, name="本级别", bi_mode="new", max_count=2000, ma_params=(5, 34, 120), verbose=False, use_xd=True
+        kline, name="本级别", bi_mode="new", max_count=2000, ma_params=(5, 34, 120), verbose=True, use_xd=True
     )
 
-    width = "1440px"
-    height = "600px"
+    width = "2500px"
+    height = "850px"
     chart_day = ka_to_echarts(ka_day, width, height)
 
     tab = Tab()
