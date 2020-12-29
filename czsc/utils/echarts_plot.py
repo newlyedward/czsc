@@ -212,10 +212,11 @@ def kline_pro(kline: List[dict],
     if bi:
         bi_dts = [x['dt'] for x in bi]
         bi_val = [x['bi'] for x in bi]
-        chart_bi = Scatter()
+        chart_bi = Line()
         chart_bi.add_xaxis(bi_dts)
         chart_bi.add_yaxis(series_name="BI", y_axis=bi_val, is_selected=True,
                            symbol="diamond", symbol_size=10, label_opts=label_not_show_opts,
+                           linestyle_opts=opts.LineStyleOpts(color="yellow", width=1, type_="dashed"),
                            itemstyle_opts=opts.ItemStyleOpts(color="rgba(184, 117, 225, 1.0)", ))
 
         chart_bi.set_global_opts(xaxis_opts=grid0_xaxis_opts, legend_opts=legend_not_show_opts)
@@ -224,9 +225,10 @@ def kline_pro(kline: List[dict],
     if xd:
         xd_dts = [x['dt'] for x in xd]
         xd_val = [x['xd'] for x in xd]
-        chart_xd = Scatter()
+        chart_xd = Line()
         chart_xd.add_xaxis(xd_dts)
         chart_xd.add_yaxis(series_name="XD", y_axis=xd_val, is_selected=True, symbol="triangle", symbol_size=10,
+                           linestyle_opts=opts.LineStyleOpts(color="white", width=2, type_="solid"),
                            itemstyle_opts=opts.ItemStyleOpts(color="rgba(37, 141, 54, 1.0)", ))
 
         chart_xd.set_global_opts(xaxis_opts=grid0_xaxis_opts, legend_opts=legend_not_show_opts)
