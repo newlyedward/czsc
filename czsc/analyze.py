@@ -230,7 +230,7 @@ class KlineAnalyze:
           'start_dt': Timestamp('2020-11-25 00:00:00'),
           'end_dt': Timestamp('2020-11-27 00:00:00'),
           'fx_power': 'strong', # 可选值：strong / weak
-          'fx_high': 144.87,
+          'fx_high': 144.87,   前一根处理过K线的高点
           'fx_low': 138.0}
         """
         if len(self.kline_new) < 3:
@@ -291,8 +291,8 @@ class KlineAnalyze:
           'fx_mark': 'd',
           'start_dt': Timestamp('2020-11-25 00:00:00'),
           'end_dt': Timestamp('2020-11-27 00:00:00'),
-          'fx_high': 144.87,
-          'fx_low': 138.0,
+          'fx_high': 144.87, 往上延申最高点 避免出现笔的端点不是极值点的情况
+          'fx_low': 138.0, 这个数据重复，可以用来记录笔的结束极值点的情况，一般情况根下一笔的
           'bi': 138.0}
 
          {'dt': Timestamp('2020-12-02 00:00:00'),
@@ -300,7 +300,7 @@ class KlineAnalyze:
           'start_dt': Timestamp('2020-12-01 00:00:00'),
           'end_dt': Timestamp('2020-12-03 00:00:00'),
           'fx_high': 150.67,
-          'fx_low': 141.6,
+          'fx_low': 141.6, 往下延申的最低点
           'bi': 150.67}
         """
         if len(self.fx_list) < 2:
@@ -334,6 +334,8 @@ class KlineAnalyze:
             last_bi = self.bi_list[-1]
             bi = dict(fx)
             bi['bi'] = bi.pop('fx')
+            if fx['dt'] == pd.to_datetime('2020-07-29'):
+                print('error')
             if last_bi['fx_mark'] == fx['fx_mark']:  # 连续高低点处理，判断是否后移
                 if (last_bi['fx_mark'] == 'g' and last_bi['bi'] < bi['bi']) \
                         or (last_bi['fx_mark'] == 'd' and last_bi['bi'] > bi['bi']):
@@ -343,16 +345,17 @@ class KlineAnalyze:
             else:
                 kn_inside = [x for x in right_kn if last_bi['end_dt'] < x['dt'] < bi['start_dt']]
                 if len(kn_inside) <= 0:  # 两个分型间至少有1根k线，端点有可能不是高低点
+
                     continue
 
                 # 确保相邻两个顶底之间不存在包含关系,两根非包含k线比较  todo ？？这里处理有问题  rbl8 2020:2.4-3.16，特别是出现大的跳空时
-                if (last_bi['fx_mark'] == 'g' and bi['fx_low'] < last_bi['fx_low']
-                    and bi['fx_high'] < last_bi['fx_high']) or \
-                        (last_bi['fx_mark'] == 'd' and bi['fx_high'] > last_bi['fx_high']
-                         and bi['fx_low'] > last_bi['fx_low']):
-                    if self.verbose:
-                        print("新增笔标记：{}".format(bi))
-                    self.bi_list.append(bi)
+                # if (last_bi['fx_mark'] == 'g' and bi['fx_low'] < last_bi['fx_low']
+                #     and bi['fx_high'] < last_bi['fx_high']) or \
+                #         (last_bi['fx_mark'] == 'd' and bi['fx_high'] > last_bi['fx_high']
+                #          and bi['fx_low'] > last_bi['fx_low']):
+                #     if self.verbose:
+                #         print("新增笔标记：{}".format(bi))
+                self.bi_list.append(bi)
 
     def _update_xd_list(self):
         """更新线段序列

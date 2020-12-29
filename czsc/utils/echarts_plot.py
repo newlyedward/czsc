@@ -81,7 +81,7 @@ def kline_pro(kline: List[dict],
     """
     # 配置项设置
     # ------------------------------------------------------------------------------------------------------------------
-    bg_color = "#1f212d"    # 背景
+    bg_color = "#1f212d"  # 背景
     up_color = "#F9293E"
     down_color = "#00aa3b"
 
@@ -109,11 +109,13 @@ def kline_pro(kline: List[dict],
     dz_slider = opts.DataZoomOpts(True, "slider", xaxis_index=[0, 1, 2], pos_top="96%",
                                   pos_bottom="0%", range_start=80, range_end=100)
 
-    yaxis_opts = opts.AxisOpts(is_scale=True, axislabel_opts=opts.LabelOpts(color="#c7c7c7", font_size=8, position="inside"))
+    yaxis_opts = opts.AxisOpts(is_scale=True,
+                               axislabel_opts=opts.LabelOpts(color="#c7c7c7", font_size=8, position="inside"))
 
     grid0_xaxis_opts = opts.AxisOpts(type_="category", grid_index=0, axislabel_opts=label_not_show_opts,
                                      split_number=20, min_="dataMin", max_="dataMax",
-                                     is_scale=True, boundary_gap=False, axisline_opts=opts.AxisLineOpts(is_on_zero=False))
+                                     is_scale=True, boundary_gap=False,
+                                     axisline_opts=opts.AxisLineOpts(is_on_zero=False))
 
     tool_tip_opts = opts.TooltipOpts(
         trigger="axis",
@@ -202,7 +204,7 @@ def kline_pro(kline: List[dict],
         chart_fx.add_xaxis(fx_dts)
         chart_fx.add_yaxis(series_name="FX", y_axis=fx_val, is_selected=False,
                            symbol="circle", symbol_size=6, label_opts=label_not_show_opts,
-                           itemstyle_opts=opts.ItemStyleOpts(color="rgba(152, 147, 193, 1.0)",))
+                           itemstyle_opts=opts.ItemStyleOpts(color="rgba(152, 147, 193, 1.0)", ))
 
         chart_fx.set_global_opts(xaxis_opts=grid0_xaxis_opts, legend_opts=legend_not_show_opts)
         chart_k = chart_k.overlap(chart_fx)
@@ -214,7 +216,7 @@ def kline_pro(kline: List[dict],
         chart_bi.add_xaxis(bi_dts)
         chart_bi.add_yaxis(series_name="BI", y_axis=bi_val, is_selected=True,
                            symbol="diamond", symbol_size=10, label_opts=label_not_show_opts,
-                           itemstyle_opts=opts.ItemStyleOpts(color="rgba(184, 117, 225, 1.0)",))
+                           itemstyle_opts=opts.ItemStyleOpts(color="rgba(184, 117, 225, 1.0)", ))
 
         chart_bi.set_global_opts(xaxis_opts=grid0_xaxis_opts, legend_opts=legend_not_show_opts)
         chart_k = chart_k.overlap(chart_bi)
@@ -225,7 +227,7 @@ def kline_pro(kline: List[dict],
         chart_xd = Scatter()
         chart_xd.add_xaxis(xd_dts)
         chart_xd.add_yaxis(series_name="XD", y_axis=xd_val, is_selected=True, symbol="triangle", symbol_size=10,
-                           itemstyle_opts=opts.ItemStyleOpts(color="rgba(37, 141, 54, 1.0)",))
+                           itemstyle_opts=opts.ItemStyleOpts(color="rgba(37, 141, 54, 1.0)", ))
 
         chart_xd.set_global_opts(xaxis_opts=grid0_xaxis_opts, legend_opts=legend_not_show_opts)
         chart_k = chart_k.overlap(chart_xd)
@@ -237,7 +239,7 @@ def kline_pro(kline: List[dict],
             chart_b = Scatter()
             chart_b.add_xaxis(b_dts)
             chart_b.add_yaxis(series_name="BUY", y_axis=b_val, is_selected=False, symbol="arrow", symbol_size=8,
-                              itemstyle_opts=opts.ItemStyleOpts(color="#f31e1e",))
+                              itemstyle_opts=opts.ItemStyleOpts(color="#f31e1e", ))
 
             chart_b.set_global_opts(xaxis_opts=grid0_xaxis_opts, legend_opts=legend_not_show_opts)
             chart_k = chart_k.overlap(chart_b)
@@ -307,5 +309,3 @@ def kline_pro(kline: List[dict],
     grid_chart.add(chart_vol, grid_opts=grid1_opts)
     grid_chart.add(chart_macd, grid_opts=grid2_opts)
     return grid_chart
-
-
