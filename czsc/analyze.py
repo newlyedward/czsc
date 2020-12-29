@@ -192,20 +192,24 @@ class KlineAnalyze:
 
             # 判断是否存在包含关系
             cur_h, cur_l = k['high'], k['low']
-            last_h, last_l = last_kn['high'], last_kn['low']
+            last_h, last_l, last_dt = last_kn['high'], last_kn['low'], last_kn['dt']
             if (cur_h <= last_h and cur_l >= last_l) or (cur_h >= last_h and cur_l <= last_l):
                 self.kline_new.pop(-1)  # 有包含关系的前一根数据被删除，这里是个技巧,todo 但会导致实际的高低点消失,只能低级别取处理
-                # 有包含关系，按方向分别处理
+                # 有包含关系，按方向分别处理,同时需要更新日期
                 if direction == "up":
-                    last_h = max(last_h, cur_h)
-                    last_l = max(last_l, cur_l)
+                    if cur_h < last_h:
+                        k.update(high=last_h, dt=last_dt)
+                    if cur_l < last_l:
+                        k.update(low=last_l)
+
                 elif direction == "down":
-                    last_h = min(last_h, cur_h)
-                    last_l = min(last_l, cur_l)
+                    if cur_l > last_l:
+                        k.update(low=last_l, dt=last_dt)
+                    if cur_h > last_h:
+                        k.update(high=last_h)
                 else:
                     raise ValueError
 
-                k.update({"high": last_h, "low": last_l})
                 # 保留红绿不变  todo 保留前一根k线的高低点在open和close当中,后续并没有用到
                 if k['open'] >= k['close']:
                     k.update({"open": last_h, "close": last_l})
