@@ -223,6 +223,7 @@ class KlineAnalyze:
         对于底分型，第三元素收在第一元素的一半以上为强势，否则为弱势；
         对于顶分型，第三元素收在第一元素的一半以下为强势，否则为弱势；
 
+        分型点不一定是极值点，上升趋势中可能出现单根k线的最低点低于前一个的底分型的最低点，因此造成，笔的端点不再极值点点
         分型标记对象样例：
          {'dt': Timestamp('2020-11-26 00:00:00'),
           'fx_mark': 'd',       # 可选值：d / g
@@ -334,19 +335,20 @@ class KlineAnalyze:
             last_bi = self.bi_list[-1]
             bi = dict(fx)
             bi['bi'] = bi.pop('fx')
-            if fx['dt'] == pd.to_datetime('2020-07-29'):
-                print('error')
-            if last_bi['fx_mark'] == fx['fx_mark']:  # 连续高低点处理，判断是否后移
+
+            if last_bi['fx_mark'] == bi['fx_mark']:  # 连续高低点处理，判断是否后移
                 if (last_bi['fx_mark'] == 'g' and last_bi['bi'] < bi['bi']) \
                         or (last_bi['fx_mark'] == 'd' and last_bi['bi'] > bi['bi']):
                     if self.verbose:
                         print("笔标记移动：from {} to {}".format(self.bi_list[-1], bi))
                     self.bi_list[-1] = bi
-            else:
+            else:  # 笔确认是条件1、时间破坏，两个不同分型间至少有一根K线，2、价格破坏，向下的一笔破坏了上一笔的低点
                 kn_inside = [x for x in right_kn if last_bi['end_dt'] < x['dt'] < bi['start_dt']]
                 if len(kn_inside) <= 0:  # 两个分型间至少有1根k线，端点有可能不是高低点
-
-                    continue
+                    # 价格破坏 的例外情况要排除
+                    if (bi['fx_mark'] == 'g' and bi['bi'] < self.bi_list[-2]['bi']) \
+                            or (bi['fx_mark'] == 'd' and bi['bi'] > self.bi_list[-2]['bi']):
+                        continue
 
                 # 确保相邻两个顶底之间不存在包含关系,两根非包含k线比较  todo ？？这里处理有问题  rbl8 2020:2.4-3.16，特别是出现大的跳空时
                 # if (last_bi['fx_mark'] == 'g' and bi['fx_low'] < last_bi['fx_low']
