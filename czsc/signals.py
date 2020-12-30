@@ -2,22 +2,33 @@
 from collections import OrderedDict
 from .analyze import KlineAnalyze
 
-def find_zs(points):
-    """输入笔或线段标记点，输出中枢识别结果"""
-    if len(points) < 5:
-        return []
 
-    # 当输入为笔的标记点时，新增 xd 值
-    for j, x in enumerate(points):
-        if x.get("bi", 0):
-            points[j]['xd'] = x["bi"]
+def find_zs(points):
+    """
+    输入笔或线段标记点，输出中枢识别结果
+    {'dt': Timestamp('2020-11-26 00:00:00'),
+          'fx_mark': 'd',
+          'value': 138.0，
+          'start_dt': Timestamp('2020-11-25 00:00:00'),
+          'end_dt': Timestamp('2020-11-27 00:00:00'),
+          'fx_high': 144.87, 往上延申最高点 避免出现笔的端点不是极值点的情况
+          'fx_low': 138.0, 这个数据重复，可以用来记录笔的结束极值点的情况，一般情况根下一笔的}
+    """
+    if len(points) < 5:  # 4段才能形成中枢？，3段就有重合部分
+        return []
+    # 统一使用value字段，不区分段或者笔
+    # # 当输入为笔的标记点时，新增 xd 值
+    # for j, x in enumerate(points):
+    #     if x.get("bi", 0):
+    #         points[j]['xd'] = x["bi"]
 
     def __get_zn(zn_points_):
         """把与中枢方向一致的次级别走势类型称为Z走势段，按中枢中的时间顺序，
         分别记为Zn等，而相应的高、低点分别记为gn、dn"""
-        if len(zn_points_) % 2 != 0:
+        if len(zn_points_) % 2 != 0: # 偶数点，奇数段，进入段和离开段保证方向一致？
             zn_points_ = zn_points_[:-1]
 
+        # 根据进入段确认中枢的方向
         if zn_points_[0]['fx_mark'] == "d":
             z_direction = "up"
         else:
@@ -28,8 +39,8 @@ def find_zs(points):
             zn_ = {
                 "start_dt": zn_points_[i]['dt'],
                 "end_dt": zn_points_[i + 1]['dt'],
-                "high": max(zn_points_[i]['xd'], zn_points_[i + 1]['xd']),
-                "low": min(zn_points_[i]['xd'], zn_points_[i + 1]['xd']),
+                "high": max(zn_points_[i]['value'], zn_points_[i + 1]['value']),
+                "low": min(zn_points_[i]['value'], zn_points_[i + 1]['value']),
                 "direction": z_direction
             }
             zn_['mid'] = zn_['low'] + (zn_['high'] - zn_['low']) / 2
@@ -45,16 +56,17 @@ def find_zs(points):
             zs_xd.append(k_xd[i])
             continue
         xd_p = k_xd[i]
-        zs_d = max([x['xd'] for x in zs_xd[:4] if x['fx_mark'] == 'd'])
-        zs_g = min([x['xd'] for x in zs_xd[:4] if x['fx_mark'] == 'g'])
-        if zs_g <= zs_d:
-            zs_xd.append(k_xd[i])
+        # 计算中枢高低点 ，4个点三段
+        zs_d = max([x['value'] for x in zs_xd[:4] if x['fx_mark'] == 'd'])
+        zs_g = min([x['value'] for x in zs_xd[:4] if x['fx_mark'] == 'g'])
+        if zs_g <= zs_d:  # 有重合属于同一个中枢
+            zs_xd.append(xd_p)
             zs_xd.pop(0)
             continue
 
         # 定义四个指标,GG=max(gn),G=min(gn),D=max(dn),DD=min(dn)，n遍历中枢中所有Zn。
         # 定义ZG=min(g1、g2), ZD=max(d1、d2)，显然，[ZD，ZG]就是缠中说禅走势中枢的区间
-        if xd_p['fx_mark'] == "d" and xd_p['xd'] > zs_g:
+        if xd_p['fx_mark'] == "d" and xd_p['value'] > zs_g:
             zn_points = zs_xd[3:]
             # 线段在中枢上方结束，形成三买
             k_zs.append({
@@ -109,6 +121,7 @@ def find_zs(points):
                 "points": zs_xd,
             })
     return k_zs
+
 
 def check_jing(fd1, fd2, fd3, fd4, fd5) -> str:
     """检查最近5个分段走势是否构成井
@@ -199,6 +212,7 @@ def check_jing(fd1, fd2, fd3, fd4, fd5) -> str:
                 jing = "向下小井B"
     return jing
 
+
 def check_third_bs(fd1, fd2, fd3, fd4, fd5) -> str:
     """输入5段走势，判断是否存在第三类买卖点
 
@@ -221,6 +235,7 @@ def check_third_bs(fd1, fd2, fd3, fd4, fd5) -> str:
         third_bs = "三买"
 
     return third_bs
+
 
 def check_dynamic(fd1, fd3, fd5):
     """计算第N段走势的涨跌力度
@@ -279,7 +294,7 @@ class KlineSignals(KlineAnalyze):
             "最近三根无包含K线形态": "other",
             "最近一个底分型上边沿": 0,
             "最近一个顶分型下边沿": 0,
-            "最近两个笔中枢状态": "other"    # 三种状态：1）重叠；2）向上；3）向下
+            "最近两个笔中枢状态": "other"  # 三种状态：1）重叠；2）向上；3）向下
         })
         # TODO: 大阳线和大阴线的一半位置，构成强支撑和强阻力
         if len(self.fx_list) > 2:
@@ -498,4 +513,3 @@ class KlineSignals(KlineAnalyze):
 
             s['三笔回调构成第三买卖点'] = check_third_bs(fd1, fd2, fd3, fd4, fd5)
         return {"{}_{}".format(self.name, k): v for k, v in s.items()}
-

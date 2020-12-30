@@ -8,10 +8,13 @@ import pandas as pd
 import pymongo
 from pandas import DataFrame
 
+from czsc.data.trade_date import util_get_real_date, trade_date_sse, util_date_valid, util_date_stamp, util_get_next_day
+from czsc.data.transform import util_to_json_from_pandas
 
-uri = 'mongodb://localhost:27017/quantaxis'
+uri = 'mongodb://localhost:27017/factor'
 client = pymongo.MongoClient(uri)
-DATABASE = client.quantaxis
+QA_DATABASE = client.quantaxis
+FACTOR_DATABASE = client.factor
 
 
 def util_code_tostr(code):
@@ -79,44 +82,10 @@ def util_code_tolist(code, auto_fill=True):
             return [item for item in code]
 
 
-def util_date_valid(date):
-    """
-    explanation:
-        判断字符串格式(1982-05-11)
-
-    params:
-        * date->
-            含义: 日期
-            类型: str
-            参数支持: []
-
-    return:
-        bool
-    """
-    try:
-        time.strptime(date, "%Y-%m-%d")
-        return True
-    except:
-        return False
-
-
-def util_date_stamp(date):
-    """
-    explanation:
-        转换日期时间字符串为浮点数的时间戳
-
-    params:
-        * date->
-            含义: 日期时间
-            类型: str
-            参数支持: []
-
-    return:
-        time
-    """
-    datestr = str(date)[0:10]
-    date = time.mktime(time.strptime(datestr, '%Y-%m-%d'))
-    return date
+def now_time():
+    return str(util_get_real_date(str(datetime.date.today() - datetime.timedelta(days=1)), trade_date_sse, -1)) + \
+           ' 17:00:00' if datetime.datetime.now().hour < 15 else str(util_get_real_date(
+        str(datetime.date.today()), trade_date_sse, -1)) + ' 15:00:00'
 
 
 def fetch_future_day(
@@ -124,7 +93,7 @@ def fetch_future_day(
         start=None,
         end=None,
         format='pandas',
-        collections=DATABASE.future_day
+        collections=QA_DATABASE.future_day
 ):
     """
     :param code:
@@ -133,13 +102,13 @@ def fetch_future_day(
     :param format:
     :param collections:
     :return: pd.DataFrame
-        columns = ["symbol", "dt", "open", "close", "high", "low", "vol"]
+        columns = ["code", "date", "open", "close", "high", "low", "position", "price", "trade"]
     """
     start = '1990-01-01' if start is None else str(start)[0:10]
     end = datetime.today().strftime('%Y-%m-%d') if end is None else str(end)[0:10]
     code = util_code_tolist(code, auto_fill=False)
 
-    if util_date_valid(end) == True:
+    if util_date_valid(end):
 
         _data = []
         cursor = collections.find(
@@ -203,3 +172,130 @@ def fetch_future_day(
         return _data
     else:
         logging.warning('Something wrong with date')
+
+
+def fetch_future_bi_day(
+        code,
+        start=None,
+        end=None,
+        format='pandas',
+        collections=FACTOR_DATABASE.future_bi_day
+):
+    """
+    :param code:
+    :param start:
+    :param end:
+    :param format:
+    :param collections:
+    :return: pd.DataFrame
+        columns = ["code", "date", "value", "fx_mark"]
+    """
+    start = '1990-01-01' if start is None else str(start)[0:10]
+    end = datetime.today().strftime('%Y-%m-%d') if end is None else str(end)[0:10]
+    code = util_code_tolist(code, auto_fill=False)
+
+    if util_date_valid(end):
+
+        _data = []
+        cursor = collections.find(
+            {
+                'code': {
+                    '$in': code
+                },
+                "date_stamp":
+                    {
+                        "$lte": util_date_stamp(end),
+                        "$gte": util_date_stamp(start)
+                    }
+            },
+            {"_id": 0},
+            batch_size=10000
+        )
+        if format in ['dict', 'json']:
+            return [data for data in cursor]
+        for item in cursor:
+            _data.append(
+                [
+                    str(item['code']),
+                    str(item['fx_mark']),
+                    float(item['value']),
+                    item['date']
+                ]
+            )
+
+        # 多种数据格式
+        if format in ['n', 'N', 'numpy']:
+            _data = numpy.asarray(_data)
+        elif format in ['list', 'l', 'L']:
+            _data = _data
+        elif format in ['P', 'p', 'pandas', 'pd']:
+            _data = DataFrame(
+                _data,
+                columns=[
+                    'code',
+                    'fx_mark',
+                    'value',
+                    'date'
+                ]
+            ).drop_duplicates()
+            _data['date'] = pd.to_datetime(_data['date'])
+            _data = _data.set_index('date', drop=False)
+        else:
+            logging.error(
+                "Error fetch_future_day format parameter %s is none of  \"P, p, pandas, pd , n, N, numpy !\" "
+                % format
+            )
+        return _data
+    else:
+        logging.warning('Something wrong with date')
+
+
+def save_future_bi_day(code, collection=FACTOR_DATABASE.future_bi_day):
+    try:
+        logging.info(
+            '##JOB12 Now Saving Future_BI_DAY==== {}'.format(str(code)),
+        )
+
+        # 首选查找数据库 是否 有 这个代码的数据
+        ref = collection.find({'code': str(code)[0:4]})
+        end_date = str(now_time())[0:10]
+
+        # 当前数据库已经包含了这个代码的数据， 继续增量更新
+        # 加入这个判断的原因是因为如果股票是刚上市的 数据库会没有数据 所以会有负索引问题出现
+        if ref.count() > 0:
+
+            # 接着上次获取的日期继续更新
+            start_date = ref[ref.count() - 1]['date']
+
+            logging.info(
+                'UPDATE_Future_BI_DAY \n Trying updating {} from {} to {}'.format(code, start_date, end_date),
+            )
+            if start_date != end_date:
+                collection.insert_many(
+                    util_to_json_from_pandas(
+                        fetch_future_day(
+                            str(code),
+                            util_get_next_day(start_date),
+                            end_date
+                        )
+                    )
+                )
+
+        # 当前数据库中没有这个代码的股票数据， 从1990-01-01 开始下载所有的数据
+        else:
+            start_date = '2001-01-01'
+            logging.info(
+                'UPDATE_Future_DAY \n Trying updating {} from {} to {}'.format(code, start_date, end_date),
+            )
+            if start_date != end_date:
+                collection.insert_many(
+                    util_to_json_from_pandas(
+                        fetch_future_day(
+                            str(code),
+                            start_date,
+                            end_date
+                        )
+                    )
+                )
+    except Exception as error:
+        print(error)

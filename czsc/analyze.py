@@ -86,7 +86,6 @@ class KlineAnalyze:
         self.bi_list = []
         self.xd_list = []
 
-        # 根据输入K线初始化
         if isinstance(kline, pd.DataFrame):
             columns = kline.columns.to_list()
             self.kline_raw = [{k: v for k, v in zip(columns, row)} for row in kline.values]
@@ -410,11 +409,15 @@ class KlineAnalyze:
 
                 bi_inside = [x for x in right_bi if last_xd['dt'] <= x['dt'] <= xd['dt']]
                 if len(bi_inside) < 4:
+                    # 线段确认的情况
+                    # 1、价格破坏线段 2、线段被线段破坏，否则即使出现连续反向三笔也不一定是新的线段
+                    # if (xd['fx_mark'] == 'g' and xd['value'] < self.xd_list[-2]['value']) \
+                    #         or (xd['fx_mark'] == 'd' and xd['value'] > self.bi_list[-2]['value']):
                     if self.verbose:
                         print("{} - {} 之间笔标记数量少于4，跳过".format(last_xd['dt'], xd['dt']))
                     continue
-                else:
-                    self.xd_list.append(xd)
+
+                self.xd_list.append(xd)
 
     def update(self, k):
         """更新分析结果
