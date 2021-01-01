@@ -24,8 +24,10 @@
 import json
 import datetime
 import logging
+import webbrowser
 
 import pymongo
+from pyecharts.charts import Tab
 
 from czsc.ClPubSub.consumer import Subscriber
 from czsc.ClPubSub.producer import Publisher
@@ -34,7 +36,8 @@ import pandas as pd
 
 from czsc.ClData.mongo import fetch_future_day, FACTOR_DATABASE, fetch_future_bi_day
 from czsc.ClEngine.ClThread import ClThread
-from czsc.ClUtils.ClTradeDate import util_get_next_day
+from czsc.ClUtils import kline_pro
+from czsc.ClUtils.ClTradeDate import util_get_next_day, util_get_trade_gap
 
 
 class ClSimBar(ClThread):
@@ -66,12 +69,12 @@ class ClSimBar(ClThread):
         self.pro = {}
 
     def publish_bar(self, item):
-        code = item.name[1]
-        print('send {} {} quotation!'.format(item.name[0], code))
+        code = item['code']
+        # print('send {} {} quotation!'.format(item['date'], code))
         producer = self.pro.get(code, Publisher(exchange='bar_{}_{}'.format(self.frq, code)))
         bar = item.to_dict()
         # todo 对输入字符进行模糊判断，转换为统一的频率标识,日期时间数据统一用datetime表示
-        bar.update(code=code, datetime=item.name[0].strftime("%Y-%m-%d %H:%M:%S"))
+        bar.update(date=item['date'].strftime("%Y-%m-%d %H:%M:%S"))
         producer.pub(json.dumps(bar))
         # time.sleep(1)
 
@@ -122,10 +125,10 @@ class ClConsumer(ClThread):
         # )
         self.c_bar = Subscriber(exchange='bar_{}_{}'.format(freq, self.code), routing_key=code)
         # self.segments = DATABASE.czsz_day.find({'code': self.code})
-        self.bars = []
+        self._bars = []
         self.new_bars = []
-        self.fx_list = []
-        self.bi_list = []
+        self._fx_list = []
+        self._bi_list = []
 
     def init(self):
         """
@@ -133,12 +136,193 @@ class ClConsumer(ClThread):
         """
         fx = fetch_future_bi_day(self.code, limit=2, format='dict')
         if len(fx) <= 2:
-            self.fx_list = fx[-1:]
+            self._fx_list = fx[-1:]
             # 需要至少两个数据，对笔的价格破坏需要通过比较同类分型
-            self.bi_list = fx
+            self._bi_list = fx
             # 不能从fx_end开始，fx_end本身也可能是分型
             start = fx[-1]['date']
-            self.bars = fetch_future_day(self.code, start=start, format='dict')
+            self._bars = fetch_future_day(self.code, start=start, format='dict')
+
+    @staticmethod
+    def identify_direction(v1, v2):
+        if v1 > v2:  # 前面几根可能都是包含，这里直接初始赋值down
+            direction = "up"
+        else:
+            direction = "down"
+        return direction
+
+    def update_new_bars(self):
+        assert len(self._bars) > 0
+        bar = self._bars[-1].copy()
+
+        # 第1根K线没有方向,不需要任何处理
+        if len(self._bars) < 2:
+            self.new_bars.append(bar)
+            return False
+
+        last_bar = self.new_bars[-1]
+
+        cur_h, cur_l = bar['high'], bar['low']
+        last_h, last_l, last_dt = last_bar['high'], last_bar['low'], last_bar['date']
+
+        # 处理过包含关系，只需要用一个值识别趋势
+        direction = self.identify_direction(cur_h, last_h)
+
+        # 第2根K线只需要更新方向
+        if len(self._bars) < 3:
+            bar.update(direction=direction)
+            self.new_bars.append(bar)
+            return False
+
+        # 没有包含关系，需要进行分型识别，趋势有可能改变
+        if (cur_h > last_h and cur_l > last_l) or (cur_h < last_h and cur_l < last_l):
+            bar.update(direction=direction)
+            self.new_bars.append(bar)
+            return True
+
+        last_direction = last_bar.get('direction')
+
+        # 有包含关系，不需要进行分型识别，趋势不改变
+        # if (cur_h <= last_h and cur_l >= last_l) or (cur_h >= last_h and cur_l <= last_l):
+        self.new_bars.pop(-1)  # 有包含关系的前一根数据被删除，这里是个技巧,todo 但会导致实际的高低点消失,只能低级别取处理
+        # 有包含关系，按方向分别处理,同时需要更新日期
+        if last_direction == "up":
+            if cur_h < last_h:
+                bar.update(high=last_h, date=last_dt)
+            if cur_l < last_l:
+                bar.update(low=last_l)
+        elif last_direction == "down":
+            if cur_l > last_l:
+                bar.update(low=last_l, date=last_dt)
+            if cur_h > last_h:
+                bar.update(high=last_h)
+        else:
+            logging.error('{} last_direction: {} is wrong'.format(last_dt, last_direction))
+            raise ValueError
+
+        # 和前一根K线方向一致
+        bar.update(direction=last_direction)
+
+        self.new_bars.append(bar)
+        return False
+
+    def update_fx(self):
+        """更新分型序列
+        分型记对象样例：
+         {
+             'date': Timestamp('2020-11-26 00:00:00'),
+              'fx_mark': 'd',
+              'value': 138.0,
+              'fx_start': Timestamp('2020-11-25 00:00:00'),
+              'fx_end': Timestamp('2020-11-27 00:00:00'),
+              'direction': 'up',
+              'fx_power': 'weak'
+          }
+
+         {
+             'date': Timestamp('2020-11-26 00:00:00'),
+              'fx_mark': 'g',
+              'value': 150.67,
+              'fx_start': Timestamp('2020-11-25 00:00:00'),
+              'fx_end': Timestamp('2020-11-27 00:00:00'),
+              'direction': 'down',
+              'fx_power': 'strong'
+          }
+        """
+        # 至少3根k线才能确定分型
+        assert len(self.new_bars) >= 3
+
+        bar1, bar2, bar3 = self.new_bars[-3], self.new_bars[-2], self.new_bars[-1]
+        bar1_mid = (bar1['high'] - bar1['low']) / 2 + bar1['low']
+
+        if bar1['high'] < bar2['high'] > bar3['high']:
+            fx = {
+                "date": bar2['date'],
+                "fx_mark": "g",
+                "value": bar2['high'],
+                "fx_start": bar1['date'],  # 记录分型的开始和结束时间
+                "fx_end": bar3['date'],
+                "direction": bar3['direction'],
+                'fx_power': 'strong' if bar3['close'] < bar1_mid else 'weak'
+            }
+            self._fx_list.append(fx)
+            return True
+
+        elif bar1['low'] > bar2['low'] < bar3['low']:
+            fx = {
+                "date": bar2['date'],
+                "fx_mark": "d",
+                "value": bar2['low'],
+                "fx_start": bar1['date'],
+                "fx_end": bar3['date'],
+                "direction": bar3['direction'],
+                'fx_power': 'strong' if bar3['close'] > bar1_mid else 'weak',
+            }
+            self._fx_list.append(fx)
+            return True
+
+        else:
+            return False
+
+    def update_bi(self):
+        """更新笔序列
+        笔标记对象样例：和分型标记序列结构一样
+         {
+             'date': Timestamp('2020-11-26 00:00:00'),
+              'fx_mark': 'd',
+              'value': 138.0,
+              'fx_start': Timestamp('2020-11-25 00:00:00'),
+              'fx_end': Timestamp('2020-11-27 00:00:00'),
+              'direction': 'up',
+              'fx_power': 'weak'
+          }
+
+         {
+             'date': Timestamp('2020-11-26 00:00:00'),
+              'fx_mark': 'g',
+              'value': 150.67,
+              'fx_start': Timestamp('2020-11-25 00:00:00'),
+              'fx_end': Timestamp('2020-11-27 00:00:00'),
+              'direction': 'down',
+              'fx_power': 'strong'
+          }
+        """
+        bi = self._fx_list[-1]
+        # print(bi)
+
+        # 没有笔时.最开始两个分型作为第一笔，增量更新时从数据库取出两个端点构成的笔时确定的
+        if len(self._bi_list) < 2:
+            self._bi_list.append(bi)
+            return False
+
+        last_bi = self._bi_list[-1]
+
+        # 连续高低点处理，只判断是否后移,没有增加笔，不需要处理
+        if last_bi['fx_mark'] == bi['fx_mark']:
+            if (last_bi['fx_mark'] == 'g' and last_bi['value'] < bi['value']) \
+                    or (last_bi['fx_mark'] == 'd' and last_bi['value'] > bi['value']):
+                self._bi_list[-1] = bi
+                return False
+        else:  # 笔确认是条件1、时间破坏，两个不同分型间至少有一根K线，2、价格破坏，向下的一笔破坏了上一笔的低点
+            # 计算分型之间k线的根数
+            # 价格确认，只有一笔时不做处理
+
+            # 时间确认,函数算了首尾，所以要删除
+            kn_inside = util_get_trade_gap(last_bi['fx_end'], bi['fx_start']) - 2
+
+            if kn_inside > 0:  # 两个分型间至少有1根k线，端点有可能不是高低点
+                self._bi_list.append(bi)
+                return True
+
+            # 只有一个端点，没有价格确认
+            if len(self._bi_list) < 2:
+                return False
+
+            # 价格确认
+            if (bi['fx_mark'] == 'g' and bi['value'] > self._bi_list[-2]['value']) \
+                    or (bi['fx_mark'] == 'd' and bi['value'] < self._bi_list[-2]['value']):
+                self._bi_list.append(bi)
+                return True
 
     def on_bar(self, a, b, c, body):
         """
@@ -151,169 +335,51 @@ class ClConsumer(ClThread):
         # 接收到终止消息后退出订阅
         if body == b'TERMINATED':
             self.c_bar.stop()
+            # 储存数据
+            pd.DataFrame(self._bi_list).to_csv('{}.csv'.format(self.code))
             return
+        # print(body)
         bar = json.loads(body)
+        # if pd.to_datetime(bar['date']) == pd.to_datetime('2020-10-14 00:00:00'):
+        #     print('error')
         # todo check bar 是新的bar或者只是更新的bar，目前仅仅处理更新的bar，更新的bar要check周期上是否合理连续
-        self.bars.append(bar)
+        bar['dt'] = pd.to_datetime(bar['date'])
+        if 'trade' in bar:
+            bar['vol'] = bar.pop('trade')
+        self._bars.append(bar)
 
-        # 2根k线才能确定方向
-        if len(self.bars) < 3:
-            self.new_bars.append(bar)
-
-        last_bar = self.new_bars[-1]  # 前面处理过包含关系，只用高点判断趋势
-        if last_bar['high'] > self.new_bars[-2]['high']:  # 前面几根可能都是包含，这里直接初始赋值down
-            direction = "up"
-        else:
-            direction = "down"
-
-        cur_h, cur_l = bar['high'], bar['low']
-        last_h, last_l, last_dt = last_bar['high'], last_bar['low'], last_bar['date']
-        if (cur_h <= last_h and cur_l >= last_l) or (cur_h >= last_h and cur_l <= last_l):
-            self.new_bars.pop(-1)  # 有包含关系的前一根数据被删除，这里是个技巧,todo 但会导致实际的高低点消失,只能低级别取处理
-            # 有包含关系，按方向分别处理,同时需要更新日期
-            if direction == "up":
-                if cur_h < last_h:
-                    bar.update(high=last_h, dt=last_dt)
-                if cur_l < last_l:
-                    bar.update(low=last_l)
-            elif direction == "down":
-                if cur_l > last_l:
-                    bar.update(low=last_l, dt=last_dt)
-                if cur_h > last_h:
-                    bar.update(high=last_h)
-            else:
-                raise ValueError
-
-        self.new_bars.append(bar)
-
-        # 至少3根k线才能确定分型
-        if len(self.new_bars) < 3:
+        if not self.update_new_bars():
             return
 
-        bar1, bar2, bar3 = self.new_bars[-2], self.new_bars[-1], bar
-        bar1_mid = (bar1['high'] - bar1['low']) / 2 + bar1['low']
-        if bar1['high'] < bar2['high'] > bar3['high']:
-            fx = {
-                "dt": bar2['dt'],
-                "fx_mark": "g",
-                "value": bar2['high'],
-                "fx_start": bar1['dt'],  # 记录分型的开始和结束时间
-                "fx_end": bar3['dt'],
-                'fx_power': 'strong' if bar3['close'] < bar1_mid else 'weak',
-                "fx_high": bar2['high'],
-                "fx_low": bar1['low'],  # 顶分型，分型前一个k线的低点
-            }
-            is_new_fx = True
+        if not self.update_fx():
+            return
 
-        elif bar1['low'] > bar2['low'] < bar3['low']:
+        # 至少两个分型才能形成笔
+        if not self.update_bi():
+            return
 
-            fx = {
-                "dt": bar2['dt'],
-                "fx_mark": "d",
-                "value": bar2['low'],
-                "fx_start": bar1['dt'],
-                "fx_end": bar3['dt'],
-                'fx_power': 'strong' if bar3['close'] > bar1_mid else 'weak',
-                "fx_high": bar1['high'],
-                "fx_low": bar2['low'],
-            }
-            is_new_fx = True
-
-        if is_new_fx:
-            fx.update(date=bar2['date'],
-                "value": bar2['low'],
-                "fx_start": bar1['dt'],
-                "fx_end": bar3['dt'],
-                'fx_power': 'strong' if bar3['close'] > bar1_mid else 'weak',
-                "fx_high": bar1['high'],
-                "fx_low": bar2['low'],
-            }
-            self.fx_list.append(fx)
-        # 从上一个分型点开始处理
-
-        # 数据处理只需要记录时间和高低点
-        segment = {
-            'datetime': bar['datetime'],
-            'code': bar['code'],
-            'high': bar['high'],
-            'low': bar['low'],
-        }
-
-        index = len(self.segments)
-
-        # todo 初始化操作， 避免都从第一个数据开始处理
-        if index == 0:
-            if len(self.segments) == 0:
-                # 从数据库中取数据的最后一个记录
-                self.segments = []
-
-                # 如果没有数据记录，说明是第一根K线
-            if len(self.segments) == 0:
-                # pb.update(trend='include', pb_high=bar['high'], pb_low=bar['low'])
-                self.segments.append(segment)
-                return
-            else:
-                pass
-
-        pre_segment = self.segments[-1]
-
-        # 如果由于处理包含关系产生的高低点不存在的话，直接去前一根K线的高低点
-        real_high_index = pre_segment.get('real_high_index', index - 1)
-        real_low_index = pre_segment.get('real_low_index', index - 1)
-
-        pre_high = self.segments[real_high_index]['high']
-        pre_low = self.segments[real_low_index]['low']
-        pre_trend = pre_segment.get('trend')
-
-        trend = identify_trend(segment['high'], segment['low'], pre_high, pre_low)
-        if trend in ['up', 'down']:
-            segment.update(trend=trend)
-
-        if pre_trend is None:
-            # 初始存在包含关系，用最短的那根k线作为基准，起点的高低点会有误差
-            if trend == 'include':
-                segment.update(real_high_index=real_high_index, real_low_index=real_low_index)
-            # 出现趋势就可以确认顶底
-            elif trend == 'up':
-                segment.update(type='bottom')
-            elif trend == 'down':
-                segment.update(type='peak')
-            else:
-                pass
-
-        if pre_trend == 'up':
-            if trend == 'down':
-                segment.update(type='peak')
-            elif trend == 'include':
-                segment.update(real_low_index=pre_segment.get('real_low_index', - 1) - 1)
-                # todo 需要判断高点是否比前一笔的高点高，如果高，新的笔形成
-            elif trend == 'included':
-                segment.update(real_high_index=pre_segment.get('real_high_index', - 1) - 1)
-            else:
-                pass
-
-        if pre_trend == 'down':
-            if trend == 'up':
-                segment.update(type='bottom')
-            elif trend == 'include':
-                segment.update(real_high_index=pre_segment.get('real_high_index', - 1) - 1)
-                # todo 需要判断高点是否比前一笔的高点高，如果高，新的笔形成
-            elif trend == 'included':
-                segment.update(real_low_index=pre_segment.get('real_low_index', - 1) - 1)
-            else:
-                pass
-
-        self.segments.append(segment)
-        if 'type' in segment:
-            # todo 将分型插入数据库
-            print('Publish {} peak and bottom message!'.format(segment['datetime']))
-            result = FACTOR_DATABASE.future_bi_day.insert_one(segment)
-            print(result.inserted_id)
         return
 
     @property
-    def fenxing(self):
-        return pd.DataFrame(self.segments)
+    def bar(self, format='dict'):
+        if format in ['dict']:
+            return self._bars
+        elif format in ['pandas', 'p', 'P']:
+            return pd.DataFrame(self._bars)
+
+    @property
+    def fenxing(self, format='dict'):
+        if format in ['dict']:
+            return self._fx_list
+        elif format in ['pandas', 'p', 'P']:
+            return pd.DataFrame(self._fx_list)
+
+    @property
+    def bi(self, format='dict'):
+        if format in ['dict']:
+            return self._bi_list
+        elif format in ['pandas', 'p', 'P']:
+            return pd.DataFrame(self._bi_list)
 
     def save_segments(self, collection=FACTOR_DATABASE.future_bi_day):
         # 先只考虑日线
@@ -355,13 +421,26 @@ def main_consumer():
     :return:
     """
     sim_bar = ClSimBar('rbl8', freq='day', start='2020-10-01')
-    czsz = ClConsumer('rbl8', freq='day')
+    # sim_bar = ClSimBar('rbl8', freq='day')
+    czsc = ClConsumer('rbl8', freq='day')
 
     sim_bar.start()
-    czsz.start()
-    sim_bar.join(6000)
-    czsz.join(6000)
-    czsz.fenxing.to_csv('segments.csv')
+    czsc.start()
+    # sim_bar.join(6000)
+    # czsc.join(6000)
+    chart = kline_pro(kline=czsc._bars)
+    # czsc.fenxing(format='p').to_csv('{}.csv'.format(czsc.code))
+    chart_path = '{}.html'.format(czsc.code)
+    chart.render(chart_path)
+    # tab = Tab()
+    # tab.add(chart, "day")
+    # tab.render(chart_path)
+    webbrowser.open(chart_path)
+
+    # tab = Tab()
+    # tab.add(chart, "day")
+    # tab.render('{}.html'.format(czsc.code))
+    # czsz.fenxing.to_csv('segments.csv')
 
 
 def QA_indicator_SEGMENT(DataFrame, *args, **kwargs):

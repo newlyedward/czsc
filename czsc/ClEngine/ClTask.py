@@ -1,4 +1,3 @@
-# coding:utf-8
 #
 # The MIT License (MIT)
 #
@@ -21,37 +20,44 @@
 # LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
-from czsc import KlineAnalyze
-from czsc.ClData.mongo import fetch_future_day
-from czsc.ClUtils import ka_to_echarts
-from pyecharts.charts import Tab
-import webbrowser
+
+from czsc.ClUtils.ClRandom import util_random_with_topic
+"""标准的QUANTAXIS事件方法,具有QA_Thread,QA_Event等特性,以及一些日志和外部接口"""
 
 
-def use_kline_analyze():
-    print('=' * 100, '\n')
-    print("KlineAnalyze 的使用方法：\n")
-    # kline = fetch_future_day('RBL8', start='2020-01-01')
-    kline = fetch_future_day('RBL8')
-    # kline.columns = ['symbol', 'open', 'high', 'low', 'close', 'position', 'price', 'vol', 'dt']
-    kline.rename(columns={'code': "symbol", "date": "dt", "trade": "vol"}, inplace=True)
+class ClTask:
 
-    kline = kline.loc[:, ['symbol', 'dt', 'open', 'close', 'high', 'low', 'vol']]
-    ka_day = KlineAnalyze(
-        kline, name="本级别", bi_mode="new", max_count=2000, ma_params=(5, 34, 120), verbose=True, use_xd=True
-    )
+    def __init__(self, worker, event, engine=None, callback=False):
+        self.worker = worker
+        self.event = event
+        self.res = None
+        self.callback = callback
+        self.task_id = util_random_with_topic('Task')
+        self.engine = engine
 
-    width = "1300px"
-    height = "650px"
-    chart_day = ka_to_echarts(ka_day, width, height)
+    def __repr__(self):
+        return '< QA_Task engine {} , worker {} , event {},  id = {} >'.format(
+            self.engine,
+            self.worker,
+            self.event,
+            id(self)
+        )
 
-    tab = Tab()
-    tab.add(chart_day, "day")
-    chart_day_html = 'ka_day.html'
-    tab.render('ka_day.html')
+    def do(self):
+        self.res = self.worker.run(self.event)
+        if self.callback:
+            self.callback(self.res)
 
-    webbrowser.open('ka_day.html')
+    @property
+    def result(self):
+        # return {
+        #     'task_id': self.task_id,
+        #     'result': self.res,
+        #     'worker': self.worker,
+        #     'event': self.event
+        # }
+        return {'task_id': self.task_id, 'result': self.res}
 
 
 if __name__ == '__main__':
-    use_kline_analyze()
+    pass

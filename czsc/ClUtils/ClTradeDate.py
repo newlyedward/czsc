@@ -7597,6 +7597,7 @@ trade_date_sse = [
     '2021-12-31',
 ]
 
+
 def util_date_valid(date):
     """
     explanation:
@@ -7641,7 +7642,7 @@ def util_get_real_date(date, trade_list=trade_date_sse, towards=-1):
     """
     explanation:
         获取真实的交易日期
-    # edward todo 可以用pd.DatetimeIndex实现
+    # edward
     params:
         * date->
             含义: 日期
@@ -7677,10 +7678,10 @@ def util_get_real_date(date, trade_list=trade_date_sse, towards=-1):
             return str(date)[0:10]
 
 
-def util_date_gap(date, gap, methods):
+def util_date_shift(date, gap, methods):
     """
     explanation:
-        返回start_day到end_day中间有多少个交易天 算首尾
+        往后或者往前移动的日K线根数，返回移动后的时间
 
     params:
         * date->
@@ -7728,5 +7729,50 @@ def util_get_next_day(date, n=1):
             参数支持: [int]
     """
     date = str(date)[0:10]
-    return util_date_gap(date, n, 'gt')
+    return util_date_shift(date, n, 'gt')
 
+
+def util_get_real_datelist(start, end):
+    """
+    explanation:
+        取数据的真实区间，当start end中间没有交易日时返回None, None,
+        同时返回的时候用 start,end=util_get_real_datelist
+
+    params:
+        * start->
+            含义: 开始日期
+            类型: date
+            参数支持: []
+        * end->
+            含义: 截至日期
+            类型: date
+            参数支持: []
+    """
+    real_start = util_get_real_date(start, trade_date_sse, 1)
+    real_end = util_get_real_date(end, trade_date_sse, -1)
+    if trade_date_sse.index(real_start) > trade_date_sse.index(real_end):
+        return None, None
+    else:
+        return (real_start, real_end)
+
+
+def util_get_trade_gap(start, end):
+    """
+    explanation:
+        返回start_day到end_day中间有多少个交易天 算首尾
+
+    params:
+        * start->
+            含义: 开始日期
+            类型: date
+            参数支持: []
+        * end->
+            含义: 截至日期
+            类型: date
+            参数支持: []
+   """
+    start, end = util_get_real_datelist(start, end)
+    if start is not None:
+        return trade_date_sse.index(end) + 1 - trade_date_sse.index(start)
+    else:
+        return 0

@@ -135,6 +135,7 @@ def kline_pro(kline: List[dict],
 
     # 数据预处理
     # ------------------------------------------------------------------------------------------------------------------
+    # dts = [x.get('dt', x['date']) for x in kline]
     dts = [x['dt'] for x in kline]
     # k_data = [[x['open'], x['close'], x['low'], x['high']] for x in kline]
     k_data = [opts.CandleStickItem(name=i, value=[x['open'], x['close'], x['low'], x['high']])
@@ -198,6 +199,7 @@ def kline_pro(kline: List[dict],
     # 缠论结果
     # ------------------------------------------------------------------------------------------------------------------
     if fx:
+        # fx_dts = [x.get('dt', x['date']) for x in fx]
         fx_dts = [x['dt'] for x in fx]
         fx_val = [x['value'] for x in fx]
         chart_fx = Scatter()
@@ -210,6 +212,7 @@ def kline_pro(kline: List[dict],
         chart_k = chart_k.overlap(chart_fx)
 
     if bi:
+        # bi_dts = [x.get('dt', x['date']) for x in bi]
         bi_dts = [x['dt'] for x in bi]
         bi_val = [x['value'] for x in bi]
         chart_bi = Line()
@@ -223,6 +226,7 @@ def kline_pro(kline: List[dict],
         chart_k = chart_k.overlap(chart_bi)
 
     if xd:
+        # xd_dts = [x.get('dt', x['date']) for x in xd]
         xd_dts = [x['dt'] for x in xd]
         xd_val = [x['value'] for x in xd]
         chart_xd = Line()

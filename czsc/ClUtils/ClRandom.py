@@ -2,7 +2,7 @@
 #
 # The MIT License (MIT)
 #
-# Copyright (c) 2016-2020
+# Copyright (c) 2016-2020 yutiansut/QUANTAXIS
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -21,37 +21,20 @@
 # LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
-from czsc import KlineAnalyze
-from czsc.ClData.mongo import fetch_future_day
-from czsc.ClUtils import ka_to_echarts
-from pyecharts.charts import Tab
-import webbrowser
+
+import random
 
 
-def use_kline_analyze():
-    print('=' * 100, '\n')
-    print("KlineAnalyze 的使用方法：\n")
-    # kline = fetch_future_day('RBL8', start='2020-01-01')
-    kline = fetch_future_day('RBL8')
-    # kline.columns = ['symbol', 'open', 'high', 'low', 'close', 'position', 'price', 'vol', 'dt']
-    kline.rename(columns={'code': "symbol", "date": "dt", "trade": "vol"}, inplace=True)
+def util_random_with_topic(topic='czsc', lens=8):
+    """
+    生成随机值
+    """
 
-    kline = kline.loc[:, ['symbol', 'dt', 'open', 'close', 'high', 'low', 'vol']]
-    ka_day = KlineAnalyze(
-        kline, name="本级别", bi_mode="new", max_count=2000, ma_params=(5, 34, 120), verbose=True, use_xd=True
-    )
+    _list = [chr(i) for i in range(65, 91)] + [chr(i) for i in range(97, 123)] + [str(i) for i in range(10)]
+    num = random.sample(_list, lens)
 
-    width = "1300px"
-    height = "650px"
-    chart_day = ka_to_echarts(ka_day, width, height)
-
-    tab = Tab()
-    tab.add(chart_day, "day")
-    chart_day_html = 'ka_day.html'
-    tab.render('ka_day.html')
-
-    webbrowser.open('ka_day.html')
+    return '{}_{}'.format(topic, ''.join(num))
 
 
 if __name__ == '__main__':
-    use_kline_analyze()
+    util_random_with_topic()

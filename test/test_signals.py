@@ -4,8 +4,8 @@ import warnings
 sys.path.insert(0, '.')
 sys.path.insert(0, '..')
 
-from czsc.data.jq import get_kline
-from czsc.data import freq_map
+from czsc.ClData.jq import get_kline
+from czsc.ClData import freq_map
 from czsc.signals import KlineSignals
 
 def test_signals():

@@ -5,7 +5,7 @@ sys.path.insert(0, ".")
 
 from datetime import datetime
 from czsc import KlineAnalyze
-from czsc.data.jq import get_kline
+from czsc.ClData.jq import get_kline
 
 def format_bi_points(bi_points):
     for i, x in enumerate(bi_points):

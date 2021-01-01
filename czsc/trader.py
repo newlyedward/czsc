@@ -1,7 +1,7 @@
 # coding: utf-8
 from datetime import datetime
 from .factors import KlineFactors, KlineGeneratorBy1Min
-from .data.jq import get_kline
+from .ClData.jq import get_kline
 
 class CzscTrader:
     """缠中说禅股票 选股/择时"""

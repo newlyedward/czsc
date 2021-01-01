@@ -16,7 +16,7 @@ cur_path = "./test"
 
 
 def test_nbar():
-    file_kline = os.path.join(cur_path, "data/000001.SH_D.csv")
+    file_kline = os.path.join(cur_path, "ClData/000001.SH_D.csv")
     kline = pd.read_csv(file_kline, encoding="utf-8")
     bars = kline.to_dict("records")
 

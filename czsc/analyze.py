@@ -2,16 +2,18 @@
 
 import warnings
 
+from .ClUtils.ClTradeDate import util_date_stamp
+
 try:
     import talib as ta
 except ImportError:
     ta_lib_hint = "没有安装 ta-lib !!! 请到 https://www.lfd.uci.edu/~gohlke/pythonlibs/#ta-lib " \
                   "下载对应版本安装，预计分析速度提升2倍"
     warnings.warn(ta_lib_hint)
-    from .utils import ta
+    from .ClUtils import ta
 import pandas as pd
 import numpy as np
-from .utils.plot import ka_to_image
+from .ClUtils.plot import ka_to_image
 
 
 def has_gap(k1, k2, min_gap=0.002):
@@ -49,8 +51,8 @@ def get_potential_xd(bi_points):
 
 
 class KlineAnalyze:
-    def __init__(self, kline, name="本级别", bi_mode="new", max_count=1000,
-                 use_xd=False, use_ta=True, ma_params=(5, 34, 120), verbose=False):
+    def __init__(self, kline, fx_list=[], bi_list=[], name="本级别", bi_mode="new", max_count=1000,
+                 use_xd=False, xx=None, use_ta=True, ma_params=(5, 34, 120), verbose=False):
         """
 
         :param kline: list or pd.DataFrame
@@ -83,7 +85,7 @@ class KlineAnalyze:
 
         # 分型、笔、线段
         self.fx_list = []
-        self.bi_list = []
+        self.bi_list = bi_list
         self.xd_list = []
 
         if isinstance(kline, pd.DataFrame):
@@ -166,8 +168,14 @@ class KlineAnalyze:
         assert self.macd[-2]['dt'] == self.kline_raw[-2]['dt']
 
     def _update_kline_new(self):
-        """更新去除包含关系的K线序列"""
-        if len(self.kline_new) < 4:     # todo 初始化2根，最后一根不确定，但是会删除，可以接接着处理
+        """
+        更新去除包含关系的K线序列
+        1、接收新的bar行情数据后调用，暂时只考虑bar结束时的调用
+        2、检查是否存在分型数据，存在分型数据从最后一个分型数据开始处理
+                            不存在分型数据，要从第二根k线开始处理，两根k线才能确定趋势
+        3、
+        """
+        if len(self.kline_new) < 2:     # todo 初始化2根，至少两根才能确定方向，增量时，第一个点时分型
             for x in self.kline_raw[:4]:
                 self.kline_new.append(dict(x))
 
@@ -200,7 +208,6 @@ class KlineAnalyze:
                         k.update(high=last_h, dt=last_dt)
                     if cur_l < last_l:
                         k.update(low=last_l)
-
                 elif direction == "down":
                     if cur_l > last_l:
                         k.update(low=last_l, dt=last_dt)
@@ -210,10 +217,10 @@ class KlineAnalyze:
                     raise ValueError
 
                 # 保留红绿不变  todo 保留前一根k线的高低点在open和close当中,后续并没有用到
-                if k['open'] >= k['close']:
-                    k.update({"open": last_h, "close": last_l})
-                else:
-                    k.update({"open": last_l, "close": last_h})
+                # if k['open'] >= k['close']:
+                #     k.update({"open": last_h, "close": last_l})
+                # else:
+                #     k.update({"open": last_l, "close": last_h})
             self.kline_new.append(k)
 
     def _update_fx_list(self):
@@ -227,8 +234,8 @@ class KlineAnalyze:
          {'dt': Timestamp('2020-11-26 00:00:00'),
           'fx_mark': 'd',       # 可选值：d / g
           'value': 138.0,          笔用bi代替
-          'start_dt': Timestamp('2020-11-25 00:00:00'),
-          'end_dt': Timestamp('2020-11-27 00:00:00'),
+          'fx_start': Timestamp('2020-11-25 00:00:00'),
+          'fx_end': Timestamp('2020-11-27 00:00:00'),
           'fx_power': 'strong', # 可选值：strong / weak
           'fx_high': 144.87,   前一根处理过K线的高点
           'fx_low': 138.0}
@@ -253,8 +260,8 @@ class KlineAnalyze:
                     "dt": k2['dt'],
                     "fx_mark": "g",
                     "value": k2['high'],
-                    "start_dt": k1['dt'],  # 记录分型的开始和结束时间
-                    "end_dt": k3['dt'],
+                    "fx_start": k1['dt'],  # 记录分型的开始和结束时间
+                    "fx_end": k3['dt'],
                     'fx_power': 'strong' if k3['close'] < k1_mid else 'weak',
                     "fx_high": k2['high'],
                     # "fx_low": k2['low'] if has_gap(k1, k2) else k1['low'],
@@ -269,8 +276,8 @@ class KlineAnalyze:
                     "dt": k2['dt'],
                     "fx_mark": "d",
                     "value": k2['low'],
-                    "start_dt": k1['dt'],
-                    "end_dt": k3['dt'],
+                    "fx_start": k1['dt'],
+                    "fx_end": k3['dt'],
                     'fx_power': 'strong' if k3['close'] > k1_mid else 'weak',
                     # "fx_high": k2['high'] if has_gap(k1, k2) else k1['high'],
                     "fx_high": k1['high'],
@@ -287,18 +294,18 @@ class KlineAnalyze:
         """更新笔序列
 
         笔标记对象样例：
-         {'dt': Timestamp('2020-11-26 00:00:00'),
+         {'date': Timestamp('2020-11-26 00:00:00'),
           'fx_mark': 'd',
-          'start_dt': Timestamp('2020-11-25 00:00:00'),
-          'end_dt': Timestamp('2020-11-27 00:00:00'),
+          'fx_start': Timestamp('2020-11-25 00:00:00'),
+          'fx_end': Timestamp('2020-11-27 00:00:00'),
           'fx_high': 144.87, 往上延申最高点 避免出现笔的端点不是极值点的情况
           'fx_low': 138.0, 这个数据重复，可以用来记录笔的结束极值点的情况，一般情况根下一笔的
           'value': 138.0}
 
-         {'dt': Timestamp('2020-12-02 00:00:00'),
+         {'date': Timestamp('2020-12-02 00:00:00'),
           'fx_mark': 'g',
-          'start_dt': Timestamp('2020-12-01 00:00:00'),
-          'end_dt': Timestamp('2020-12-03 00:00:00'),
+          'fx_start': Timestamp('2020-12-01 00:00:00'),
+          'fx_end': Timestamp('2020-12-03 00:00:00'),
           'fx_high': 150.67,
           'fx_low': 141.6, 往下延申的最低点
           'value': 150.67}
@@ -342,7 +349,7 @@ class KlineAnalyze:
                         print("笔标记移动：from {} to {}".format(self.bi_list[-1], bi))
                     self.bi_list[-1] = bi
             else:  # 笔确认是条件1、时间破坏，两个不同分型间至少有一根K线，2、价格破坏，向下的一笔破坏了上一笔的低点
-                kn_inside = [x for x in right_kn if last_bi['end_dt'] < x['dt'] < bi['start_dt']]
+                kn_inside = [x for x in right_kn if last_bi['fx_end'] < x['dt'] < bi['fx_start']]
                 if len(kn_inside) <= 0:  # 两个分型间至少有1根k线，端点有可能不是高低点
                     # 价格破坏 的例外情况要排除
                     if (bi['fx_mark'] == 'g' and bi['value'] < self.bi_list[-2]['value']) \
@@ -364,8 +371,8 @@ class KlineAnalyze:
         线段标记对象样例：
          {'dt': Timestamp('2020-07-09 00:00:00'),
           'fx_mark': 'g',
-          'start_dt': Timestamp('2020-07-08 00:00:00'),
-          'end_dt': Timestamp('2020-07-14 00:00:00'),
+          'fx_start': Timestamp('2020-07-08 00:00:00'),
+          'fx_end': Timestamp('2020-07-14 00:00:00'),
           todo 可以用端点类型fx,bi,xd和value代替
           'fx_high': 187.99,
           'fx_low': 163.12,
@@ -373,8 +380,8 @@ class KlineAnalyze:
 
          {'dt': Timestamp('2020-11-02 00:00:00'),
           'fx_mark': 'd',
-          'start_dt': Timestamp('2020-10-29 00:00:00'),
-          'end_dt': Timestamp('2020-11-03 00:00:00'),
+          'fx_start': Timestamp('2020-10-29 00:00:00'),
+          'fx_end': Timestamp('2020-11-03 00:00:00'),
           'fx_high': 142.38,
           'fx_low': 135.0,
           'value': 135.0}
@@ -412,7 +419,7 @@ class KlineAnalyze:
                     # 线段确认的情况
                     # 1、价格破坏线段 2、线段被线段破坏，否则即使出现连续反向三笔也不一定是新的线段
                     # if (xd['fx_mark'] == 'g' and xd['value'] < self.xd_list[-2]['value']) \
-                    #         or (xd['fx_mark'] == 'd' and xd['value'] > self.bi_list[-2]['value']):
+                    #         or (xd['fx_mark'] == 'd' and xd['value'] > self._bi_list[-2]['value']):
                     if self.verbose:
                         print("{} - {} 之间笔标记数量少于4，跳过".format(last_xd['dt'], xd['dt']))
                     continue
@@ -625,3 +632,20 @@ class KlineAnalyze:
                 "mode": "bi"
             })
         return res
+
+    def get_bi(self, format='list'):
+        bi_list = [
+            {
+                "code": self.symbol,
+                "date": str(x["dt"]),
+                "fx_mark": x["fx_mark"],
+                "fx_start": x["fx_start"],
+                "fx_end": x["fx_end"],
+                "value": x['value'],
+                "date_stamp": util_date_stamp(x["dt"])
+            } for x in self.bi_list
+        ]
+        if format in ['list', 'l', 'L']:
+            return bi_list
+        elif format in ['pandas', 'p', 'P']:
+            pd.DataFrame(bi_list)
