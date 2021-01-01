@@ -426,9 +426,9 @@ def main_consumer():
 
     sim_bar.start()
     czsc.start()
-    # sim_bar.join(6000)
-    # czsc.join(6000)
-    chart = kline_pro(kline=czsc._bars)
+    sim_bar.join(6000)
+    czsc.join(6000)
+    chart = kline_pro(kline=czsc.bar)
     # czsc.fenxing(format='p').to_csv('{}.csv'.format(czsc.code))
     chart_path = '{}.html'.format(czsc.code)
     chart.render(chart_path)
