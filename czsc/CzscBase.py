@@ -22,24 +22,22 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 import json
-import datetime
 import logging
 import webbrowser
 
 from abc import ABCMeta, abstractmethod
-
+import datetime
+import pandas as pd
 import pymongo
 from pyecharts.charts import Tab
 
 from czsc.ClPubSub.consumer import Subscriber
 from czsc.ClPubSub.producer import Publisher
 
-import pandas as pd
-
 from czsc.ClData.mongo import fetch_future_day, FACTOR_DATABASE, fetch_future_bi_day
 from czsc.ClEngine.ClThread import ClThread
 from czsc.ClUtils import kline_pro
-from czsc.ClUtils.ClTradeDate import util_get_next_day, util_get_trade_gap, util_format_date2str
+from czsc.ClUtils.ClTradeDate import util_get_next_day, util_get_trade_gap
 
 
 class ClSimBar(ClThread):
@@ -93,12 +91,8 @@ class ClSimBar(ClThread):
 class CzscBase:
     def __init__(self, code, freq):
         self.freq = freq
-        if isinstance(code, str):
-            self.code = [code.upper()]
-        elif isinstance(code, list):
-            self.code = [c.upper() for c in code]
-        else:
-            logging.info('Wrong code format!')
+        assert isinstance(code, str)
+        self.code = code.upper()
 
         self._bars = []
         self._new_bars = []
@@ -235,8 +229,7 @@ class CzscBase:
               'value': 138.0,
               'fx_start': Timestamp('2020-11-25 00:00:00'),
               'fx_end': Timestamp('2020-11-27 00:00:00'),
-              'direction': 'up',
-              'fx_power': 'weak'
+              'direction': 'up'
           }
 
          {
@@ -245,13 +238,13 @@ class CzscBase:
               'value': 150.67,
               'fx_start': Timestamp('2020-11-25 00:00:00'),
               'fx_end': Timestamp('2020-11-27 00:00:00'),
-              'direction': 'down',
-              'fx_power': 'strong'
+              'direction': 'down'
           }
         """
-        bi = self._fx_list[-1]
-        # print(bi)
-
+        bi = self._fx_list[-1].copy()
+        # bi不需要考虑转折的分型强度
+        bi.pop('fx_power')
+        bi.update(code=self.code)
         # 没有笔时.最开始两个分型作为第一笔，增量更新时从数据库取出两个端点构成的笔时确定的
         if len(self._bi_list) < 2:
             self._bi_list.append(bi)
@@ -307,9 +300,15 @@ class CzscMongo(CzscBase):
         # 只处理一个品种
         super().__init__(code, freq)
 
-    def run(self):
-        data = fetch_future_day(self.code, self._start, self._end)
-        data.apply(self.update, axis=1)
+        self._bi_list = fetch_future_bi_day(self.code, limit=2, format='dict')
+        self.old_count = len(self._bi_list)
+        if len(self._bi_list) > 0:
+            # self._fx_list = self._bi_list
+            start = self._bi_list[-1]['fx_end']
+        else:
+            start = '1990-01-01'
+
+        self.data = fetch_future_day(code, start)
 
     def draw(self, chart_path=None):
         chart = kline_pro(kline=self._bars, fx=self._fx_list, bi=self._bi_list)
@@ -332,15 +331,35 @@ class CzscMongo(CzscBase):
         self.update(bar)
 
     def run(self, start=None, end=None):
-        start = '1990-01-01' if start is None else start
-        end = str(datetime.date.today()) if end is None else end
-        start = str(start)[0:10]
-        end = str(end)[0:10]
 
-        code = self.code[0]
+        self.data.apply(self.on_bar, axis=1)
+        self._save()
 
-        data = fetch_future_day(code, start, end)
-        data.apply(self.on_bar, axis=1)
+    def _save(self, collection=FACTOR_DATABASE.future_bi_day):
+        try:
+            logging.info('Now Saving Future_BI_DAY==== {}'.format(str(self.code)))
+            code = self.code
+
+            old_count = self.old_count
+            new_count = len(self._bi_list)
+
+            # 更新的数据，最后一个数据是未确定数据
+            update_count = new_count - old_count
+
+            if update_count < 2:
+                return
+
+            bi_list = self._bi_list[old_count:new_count-1]
+
+            start = bi_list[0]['date']
+            end = bi_list[-1]['date']
+            logging.info(
+                'UPDATE_Future_BI_DAY \n Trying updating {} from {} to {}'.format(code, start, end),
+            )
+
+            collection.insert_many(bi_list)
+        except Exception as error:
+            print(error)
 
 
 class ClConsumer(ClThread):
@@ -795,7 +814,7 @@ def main_segment():
 def main_mongo():
     czsc_mongo = CzscMongo(code='rbl8', freq='day')
     czsc_mongo.run()
-    czsc_mongo.draw()
+    # czsc_mongo.draw()
 
 
 if __name__ == '__main__':
