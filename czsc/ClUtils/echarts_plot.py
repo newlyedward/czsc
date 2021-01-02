@@ -136,7 +136,10 @@ def kline_pro(kline: List[dict],
     # 数据预处理
     # ------------------------------------------------------------------------------------------------------------------
     # dts = [x.get('dt', x['date']) for x in kline]
-    dts = [x['dt'] for x in kline]
+    try:
+        dts = [x['date'] for x in kline]
+    except:
+        dts = [x['dt'] for x in kline]
     # k_data = [[x['open'], x['close'], x['low'], x['high']] for x in kline]
     k_data = [opts.CandleStickItem(name=i, value=[x['open'], x['close'], x['low'], x['high']])
               for i, x in enumerate(kline)]
@@ -200,7 +203,10 @@ def kline_pro(kline: List[dict],
     # ------------------------------------------------------------------------------------------------------------------
     if fx:
         # fx_dts = [x.get('dt', x['date']) for x in fx]
-        fx_dts = [x['dt'] for x in fx]
+        try:
+            fx_dts = [x['date'] for x in fx]
+        except:
+            fx_dts = [x['dt'] for x in fx]
         fx_val = [x['value'] for x in fx]
         chart_fx = Scatter()
         chart_fx.add_xaxis(fx_dts)
@@ -213,7 +219,10 @@ def kline_pro(kline: List[dict],
 
     if bi:
         # bi_dts = [x.get('dt', x['date']) for x in bi]
-        bi_dts = [x['dt'] for x in bi]
+        try:
+            bi_dts = [x['date'] for x in bi]
+        except:
+            bi_dts = [x['dt'] for x in bi]
         bi_val = [x['value'] for x in bi]
         chart_bi = Line()
         chart_bi.add_xaxis(bi_dts)
@@ -227,7 +236,10 @@ def kline_pro(kline: List[dict],
 
     if xd:
         # xd_dts = [x.get('dt', x['date']) for x in xd]
-        xd_dts = [x['dt'] for x in xd]
+        try:
+            xd_dts = [x['date'] for x in xd]
+        except:
+            xd_dts = [x['dt'] for x in xd]
         xd_val = [x['value'] for x in xd]
         chart_xd = Line()
         chart_xd.add_xaxis(xd_dts)
