@@ -1,9 +1,7 @@
 # coding: utf-8
-import logging
 import time
 from datetime import datetime
 
-# todo 🛠 只记录非交易日，其余的用程序迭代 生成交易日
 
 trade_date_sse = [
     '1990-12-19',
@@ -7617,6 +7615,25 @@ def util_date_valid(date):
         return True
     except:
         return False
+
+
+def util_date_stamp(date):
+    """
+    explanation:
+        转换日期时间字符串为浮点数的时间戳
+
+    params:
+        * date->
+            含义: 日期时间
+            类型: str
+            参数支持: []
+
+    return:
+        time
+    """
+    datestr = str(date)[0:10]
+    date = time.mktime(time.strptime(datestr, '%Y-%m-%d'))
+    return date
 
 
 def util_date_stamp(date):
