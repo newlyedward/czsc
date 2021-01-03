@@ -199,7 +199,7 @@ def fetch_future_bi_day(
         code,
         start=None,
         end=None,
-        limit=1,
+        limit=2,
         format='pandas',
         collections=FACTOR_DATABASE.future_bi_day
 ):
@@ -249,7 +249,7 @@ def fetch_future_bi_day(
             filter=filter,
             projection=projection,
             limit=limit,
-            sort=[('date_stamp', -1)],
+            sort=[('date', -1)],
             batch_size=10000
         )
 
