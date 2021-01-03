@@ -98,6 +98,7 @@ class CzscBase:
         self._new_bars = []
         self._fx_list = []
         self._bi_list = []
+        self._zs_list = []
 
     @staticmethod
     def identify_direction(v1, v2):
@@ -225,6 +226,7 @@ class CzscBase:
         笔标记对象样例：和分型标记序列结构一样
          {
              'date': Timestamp('2020-11-26 00:00:00'),
+             'code': code,
               'fx_mark': 'd',
               'value': 138.0,
               'fx_start': Timestamp('2020-11-25 00:00:00'),
@@ -234,6 +236,7 @@ class CzscBase:
 
          {
              'date': Timestamp('2020-11-26 00:00:00'),
+             'code': code,
               'fx_mark': 'g',
               'value': 150.67,
               'fx_start': Timestamp('2020-11-25 00:00:00'),
@@ -279,6 +282,88 @@ class CzscBase:
                 self._bi_list.append(bi)
                 return True
 
+    def update_zs(self):
+        """
+        {
+              'zs_start': 进入段的起点
+              'zs_end':  离开段的终点
+              'ZG': 中枢高点,
+              'ZD': 中枢低点,
+              'GG': 中枢最低点,
+              'DD': 中枢最高点，
+              'bi_list': list[dict]   与中枢方向相反的特征笔序列
+          }
+        """
+        if len(self._zs_list) < 1:
+            assert len(self._bi_list) < 4
+            zg = self._bi_list[0] if self._bi_list[0]['fx_mark'] == 'g' else self._bi_list[1]
+            zd = self._bi_list[0] if self._bi_list[0]['fx_mark'] == 'd' else self._bi_list[1]
+            zs = {
+                'ZG': zg,
+                'ZD': zd,
+                'GG': [zg],   # 初始用list储存，记录高低点的变化过程，中枢完成时可能会回退
+                'DD': [zd],   # 根据最高最低点的变化过程可以识别时扩散，收敛，向上还是向下的形态
+                'bi_list': self._bi_list[:2]
+            }
+            self._zs_list.append(zs)
+            return True
+
+        # 确定性的笔参与中枢构建
+        last_zs = self._zs_list[-1]
+        bi = self._bi_list[-2]
+
+        if bi['fx_mark'] == 'g':
+            # 三卖 ,滞后，实际出现了一买信号
+            if bi['value'] < last_zs['ZD']['value']:
+                zs_end = last_zs['bi_list'].pop(-1)
+                last_zs.update(
+                    zs_end=zs_end,
+                    DD=last_zs['DD'].pop(-1) if zs_end['date'] == last_zs['DD'][-1]['date'] else last_zs['DD']
+                )
+
+                zs = {
+                    'zs_start': self._bi_list[-4],
+                    'ZG': bi,
+                    'ZD': zs_end,
+                    'GG': [bi],
+                    'DD': [zs_end],
+                    'bi_list': [zs_end, bi]
+                }
+                self._zs_list.append(zs)
+                return True
+            elif bi['value'] < last_zs['ZG']['value']:
+                last_zs.update(ZG=bi)
+            # 有可能成为离开段
+            elif bi['value'] > last_zs['GG'][-1]['value']:
+                last_zs['GG'].append(bi)
+        elif bi['fx_mark'] == 'd':
+            # 三买，滞后，实际出现了一卖信号
+            if bi['value'] > last_zs['ZG']['value']:
+                zs_end = last_zs['bi_list'].pop(-1)
+                last_zs.update(
+                    zs_end=zs_end,
+                    GG=last_zs['GG'].pop(-1) if zs_end['date'] == last_zs['GG'][-1]['date'] else last_zs['GG']
+                )
+                zs = {
+                    'zs_start': self._bi_list[-4],
+                    'ZG': zs_end,
+                    'ZD': bi,
+                    'GG': [zs_end],
+                    'DD': [bi],
+                    'bi_list': [zs_end, bi]
+                }
+                self._zs_list.append(zs)
+                return True
+            elif bi['value'] > last_zs['ZD']['value']:
+                last_zs.update(ZD=bi)
+            # 有可能成为离开段
+            elif bi['value'] < last_zs['DD'][-1]['value']:
+                last_zs['DD'].append(bi)
+        else:
+            raise ValueError
+        last_zs['bi_list'].append(bi)
+        return False
+
     def update(self, bar):
         if not self.update_new_bars():
             return
@@ -290,6 +375,11 @@ class CzscBase:
         if not self.update_bi():
             return
 
+        if not self.update_zs():
+            return
+
+        # 三买或者三卖后形成的分型
+
     #  必须实现,每次输入一个行情数据，然后调用update看是否需要更新
     def on_bar(self, bar):
         raise NotImplementedError
@@ -300,7 +390,8 @@ class CzscMongo(CzscBase):
         # 只处理一个品种
         super().__init__(code, freq)
 
-        self._bi_list = fetch_future_bi_day(self.code, limit=2, format='dict')
+        # self._bi_list = fetch_future_bi_day(self.code, limit=2, format='dict')
+        self._bi_list = []
         self.old_count = len(self._bi_list)
         if len(self._bi_list) > 0:
             # self._fx_list = self._bi_list
@@ -349,7 +440,7 @@ class CzscMongo(CzscBase):
             if update_count < 2:
                 return
 
-            bi_list = self._bi_list[old_count:new_count-1]
+            bi_list = self._bi_list[old_count:new_count - 1]
 
             start = bi_list[0]['date']
             end = bi_list[-1]['date']
