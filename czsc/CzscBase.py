@@ -90,6 +90,7 @@ class ClSimBar(ClThread):
 
 class CzscBase:
     def __init__(self, code, freq):
+        self._bifx_list = []
         self.freq = freq
         assert isinstance(code, str)
         self.code = code.upper()
@@ -98,7 +99,9 @@ class CzscBase:
         self._new_bars = []
         self._fx_list = []
         self._bi_list = []
+        self._xd_list = []
         self._zs_list = []
+        self._sig_list = []
 
     @staticmethod
     def identify_direction(v1, v2):
@@ -282,6 +285,88 @@ class CzscBase:
                 self._bi_list.append(bi)
                 return True
 
+    def update_xd(self):
+        """更新笔分型序列
+        分型记对象样例：
+         {
+             'date': Timestamp('2020-11-26 00:00:00'),
+              'fx_mark': 'd',
+              'value': 138.0,
+              'fx_start': Timestamp('2020-11-25 00:00:00'),
+              'fx_end': Timestamp('2020-11-27 00:00:00'),
+              'direction': 'up',
+              'fx_power': 'weak'
+          }
+
+         {
+             'date': Timestamp('2020-11-26 00:00:00'),
+              'fx_mark': 'g',
+              'value': 150.67,
+              'fx_start': Timestamp('2020-11-25 00:00:00'),
+              'fx_end': Timestamp('2020-11-27 00:00:00'),
+              'direction': 'down',
+              'fx_power': 'strong'
+          }
+        """
+        # 至少3根同类型分型才可能出现线段，最有1根bi不确定，不能参与计算
+        if len(self._bi_list) < 6:
+            return False
+
+        if len(self._xd_list) < 1:
+            # 线段不存在，初始化线段，前面找一个g点
+            bi_list = self._bi_list.copy()
+            bi_list = sorted(bi_list, key=lambda x: x['value'], reverse=False)
+            xd_list = [bi_list[0], bi_list[-1]]
+            xd_list = sorted(xd_list, key=lambda x: x['date'], reverse=False)
+            self._xd_list = xd_list
+            return True
+
+        bi1, bi2, bi3 = self._bi_list[-6], self._bi_list[-4], self._bi_list[-2]
+
+        if bi2['fx_mark'] == 'g':
+            last_xd = self._xd_list[-1]
+            # 价格确认
+            if last_xd['fx_mark'] == 'g' and bi2['value'] > last_xd['value']:
+                self._xd_list[-1] = bi2
+                return True
+
+            # 分型确认
+            if bi1['value'] < bi2['value'] > bi3['value']:
+                # 向更高点延续
+                if last_xd['fx_mark'] == 'g':
+                    if last_xd['value'] < bi2['value']:
+                        self._xd_list[-1] = bi2
+                elif last_xd['fx_mark'] == 'd':
+                    # 线段和笔不重合
+                    if last_xd['date'] < self._bi_list[-5]['date'] or self._xd_list[-2]['value'] < bi2['value']:
+                        self._xd_list.append(bi2)
+                        return True
+
+                else:
+                    raise ValueError
+
+        # 笔出现底分型结构
+        elif bi2['fx_mark'] == 'd':
+            last_xd = self._xd_list[-1]
+            # 价格确认
+            if last_xd['fx_mark'] == 'd' and bi2['value'] < last_xd['value']:
+                self._xd_list[-1] = bi2
+                return True
+
+            # 分型确认
+            if bi1['value'] > bi2['value'] < bi3['value']:
+
+                if last_xd['fx_mark'] == 'd':
+                    if last_xd['value'] > bi2['value']:
+                        self._xd_list[-1] = bi2
+                elif last_xd['fx_mark'] == 'g':
+                    if last_xd['date'] < self._bi_list[-5]['date'] or self._xd_list[-2]['value'] > bi2['value']:
+                        self._xd_list.append(bi2)
+                        return True
+                else:
+                    raise ValueError
+        return False
+
     def update_zs(self):
         """
         {
@@ -301,12 +386,12 @@ class CzscBase:
             zs = {
                 'ZG': zg,
                 'ZD': zd,
-                'GG': [zg],   # 初始用list储存，记录高低点的变化过程，中枢完成时可能会回退
-                'DD': [zd],   # 根据最高最低点的变化过程可以识别时扩散，收敛，向上还是向下的形态
+                'GG': [zg],  # 初始用list储存，记录高低点的变化过程，中枢完成时可能会回退
+                'DD': [zd],  # 根据最高最低点的变化过程可以识别时扩散，收敛，向上还是向下的形态
                 'bi_list': self._bi_list[:2]
             }
             self._zs_list.append(zs)
-            return True
+            return False
 
         # 确定性的笔参与中枢构建
         last_zs = self._zs_list[-1]
@@ -362,6 +447,64 @@ class CzscBase:
         else:
             raise ValueError
         last_zs['bi_list'].append(bi)
+
+        return False
+
+    def update_sig(self):
+        """
+        缠论买卖信号，一二三买卖
+        """
+        if len(self._zs_list) < 1:
+            return False
+
+        # 不确定性的笔来给出买卖信号
+        zs = self._zs_list[-1]
+        bi = self._bi_list[-1]
+        bar = self._bars[-1]
+        last_new_bar = self._new_bars[-2]
+
+        if bi['fx_mark'] == 'g':
+            sig = {
+                'bs': 'sell',
+                'date': bar['date'],
+                'value': last_new_bar['low']
+            }
+            # 中枢只有一根确定的笔，说明不是一卖就是二卖，小级别查趋势确认
+            if len(zs['bi_list']) < 3:
+                if bi['value'] > zs['ZG']['value']:
+                    sig.update(type_="I_sell")
+                else:
+                    sig.update(type_="II_sell")
+            # 三卖
+            if bi['value'] < zs['ZD']['value']:
+                sig.update(type_="III_sell")
+            # 盘整背驰卖点,比较前一同向段,持续时间差不多的情况才有比较的价值
+            elif bi['value'] > zs['GG'][-1]['value']:
+                sig.update(type_="pb_sell")
+        elif bi['fx_mark'] == 'd':
+            sig = {
+                'bs': 'buy',
+                'date': bar['date'],
+                'value': last_new_bar['high']
+            }
+            # 中枢只有一根确定的笔，说明不是一买就是二买，小级别查趋势确认
+            if len(zs['bi_list']) < 3:
+                if bi['value'] < zs['ZD']['value']:
+                    sig.update(type_="I_buy")
+                else:
+                    sig.update(type_="II_buy")
+            # 三买
+            if bi['value'] > zs['ZG']['value']:
+                sig.update(type_="III_buy")
+            elif bi['value'] < zs['DD'][-1]['value']:
+                sig.update(type_="pb_buy")
+        else:
+            raise ValueError
+
+        if 'type_' in sig:
+            self._sig_list.append(sig)
+            return True
+
         return False
 
     def update(self, bar):
@@ -375,10 +518,10 @@ class CzscBase:
         if not self.update_bi():
             return
 
+        self.update_xd()
+
         if not self.update_zs():
             return
-
-        # 三买或者三卖后形成的分型
 
     #  必须实现,每次输入一个行情数据，然后调用update看是否需要更新
     def on_bar(self, bar):
@@ -402,7 +545,10 @@ class CzscMongo(CzscBase):
         self.data = fetch_future_day(code, start)
 
     def draw(self, chart_path=None):
-        chart = kline_pro(kline=self._bars, fx=self._fx_list, bi=self._bi_list)
+        chart = kline_pro(
+            kline=self._bars, fx=self._fx_list, bi=self._bi_list,
+            zs=self._zs_list, bs=self._sig_list, xd=self._xd_list
+        )
         if not chart_path:
             chart_path = '{}.html'.format(self.code)
         chart.render(chart_path)
@@ -424,9 +570,9 @@ class CzscMongo(CzscBase):
     def run(self, start=None, end=None):
 
         self.data.apply(self.on_bar, axis=1)
-        self._save()
+        # self.save()
 
-    def _save(self, collection=FACTOR_DATABASE.future_bi_day):
+    def save(self, collection=FACTOR_DATABASE.future_bi_day):
         try:
             logging.info('Now Saving Future_BI_DAY==== {}'.format(str(self.code)))
             code = self.code
@@ -903,9 +1049,9 @@ def main_segment():
 
 
 def main_mongo():
-    czsc_mongo = CzscMongo(code='rbl8', freq='day')
+    czsc_mongo = CzscMongo(code='srl8', freq='day')
     czsc_mongo.run()
-    # czsc_mongo.draw()
+    czsc_mongo.draw()
 
 
 if __name__ == '__main__':
