@@ -96,6 +96,7 @@ class CzscBase:
         assert isinstance(code, str)
         self.code = code.upper()
 
+        self._trade_date = []     # 用来查找索引
         self._bars = []
         self._new_bars = []
         self._fx_list = []
@@ -116,6 +117,7 @@ class CzscBase:
         assert len(self._bars) > 0
         bar = self._bars[-1].copy()
 
+        self._trade_date.append(bar['date'])
         # 第1根K线没有方向,不需要任何处理
         if len(self._bars) < 2:
             self._new_bars.append(bar)
@@ -248,7 +250,12 @@ class CzscBase:
               'direction': 'down'
           }
         """
+        # 每根k线都要对bi进行判断
+        if len(self._fx_list) < 1:
+            return False
+
         bi = self._fx_list[-1].copy()
+
         # bi不需要考虑转折的分型强度
         bi.pop('fx_power')
         bi.update(code=self.code)
@@ -258,6 +265,48 @@ class CzscBase:
             return False
 
         last_bi = self._bi_list[-1]
+
+        bar = self._new_bars[-1].copy()
+        bar.update(value=bar['high'] if bar['direction'] == 'up' else bar['low'])
+
+        trade_date = self._trade_date
+
+        # k 线确认模式
+        if bar['date'] > bi['fx_end']:
+            # 时间确认,函数算了首尾，所以要删除，todo 包含的情况程序走不到这里
+            if 'fx_mark' in last_bi:
+                # 趋势延续替代,首先确认是否延续
+                if (last_bi['fx_mark'] == 'g' and bar['high'] > last_bi['value']) \
+                        or (last_bi['fx_mark'] == 'd' and bar['low'] < last_bi['value']):
+                    self._bi_list[-1] = bar
+                    return False
+                # 必须是反趋势线的k线根数是5根
+                kn_inside = trade_date.index(bar['date']) - trade_date.index(last_bi['fx_end']) - 1
+
+                # 必须被和笔方向相同趋势的k线代替，相反方向的会形成分型，由分型处理
+                if kn_inside > 2 and bar['direction'] == last_bi['direction']:  # 两个分型间至少有1根k线，端点有可能不是高低点
+                    self._bi_list.append(bar)
+                    return True
+
+                # 只有一个端点，没有价格确认
+                if len(self._bi_list) < 2:
+                    return False
+
+                # 价格确认
+                if (last_bi['fx_mark'] == 'd' and bar['high'] > self._bi_list[-2]['value']) \
+                        or (last_bi['fx_mark'] == 'g' and bar['low'] < self._bi_list[-2]['value']):
+                    self._bi_list.append(bar)
+                    return True
+
+            else: # 原有未出现分型笔的延续，todo,只能替代原趋势，需要增加assert
+                assert bar['direction'] == last_bi['direction']
+                self._bi_list[-1] = bar
+                return False
+
+        # 非分型结尾笔，直接替换成分型, 没有新增笔，后续不需要处理
+        if 'fx_mark' not in last_bi or bi['date'] == last_bi['date']:
+            self._bi_list[-1] = bi
+            return False
 
         # 连续高低点处理，只判断是否后移,没有增加笔，不需要处理
         if last_bi['fx_mark'] == bi['fx_mark']:
@@ -270,7 +319,7 @@ class CzscBase:
             # 价格确认，只有一笔时不做处理
 
             # 时间确认,函数算了首尾，所以要删除
-            kn_inside = util_get_trade_gap(last_bi['fx_end'], bi['fx_start']) - 2
+            kn_inside = trade_date.index(bi['fx_start']) - trade_date.index(last_bi['fx_end']) - 1
 
             if kn_inside > 0:  # 两个分型间至少有1根k线，端点有可能不是高低点
                 self._bi_list.append(bi)
@@ -315,20 +364,22 @@ class CzscBase:
 
         if len(self._xd_list) < 1:
             # 线段不存在，初始化线段，前面找一个g点
-            bi_list = self._bi_list.copy()
+            bi_list = self._bi_list[:-1].copy()
             bi_list = sorted(bi_list, key=lambda x: x['value'], reverse=False)
             xd_list = [bi_list[0], bi_list[-1]]
             xd_list = sorted(xd_list, key=lambda x: x['date'], reverse=False)
             self._xd_list = xd_list
             return True
 
-        bi1, bi2, bi3 = self._bi_list[-6], self._bi_list[-4], self._bi_list[-2]
+        bi1, bi2, bi3 = self._bi_list[-6], self._bi_list[-4].copy(), self._bi_list[-2]
+        xd = bi2
+        last_xd = self._xd_list[-1]
 
         if bi2['fx_mark'] == 'g':
-            last_xd = self._xd_list[-1]
+
             # 价格确认
             if last_xd['fx_mark'] == 'g' and bi2['value'] > last_xd['value']:
-                self._xd_list[-1] = bi2
+                self._xd_list[-1] = xd
                 return True
 
             # 分型确认
@@ -336,11 +387,11 @@ class CzscBase:
                 # 向更高点延续
                 if last_xd['fx_mark'] == 'g':
                     if last_xd['value'] < bi2['value']:
-                        self._xd_list[-1] = bi2
+                        self._xd_list[-1] = xd
                 elif last_xd['fx_mark'] == 'd':
                     # 线段和笔不重合
                     if last_xd['date'] < self._bi_list[-5]['date'] or self._xd_list[-2]['value'] < bi2['value']:
-                        self._xd_list.append(bi2)
+                        self._xd_list.append(xd)
                         return True
 
                 else:
@@ -348,10 +399,10 @@ class CzscBase:
 
         # 笔出现底分型结构
         elif bi2['fx_mark'] == 'd':
-            last_xd = self._xd_list[-1]
+
             # 价格确认
             if last_xd['fx_mark'] == 'd' and bi2['value'] < last_xd['value']:
-                self._xd_list[-1] = bi2
+                self._xd_list[-1] = xd
                 return True
 
             # 分型确认
@@ -359,10 +410,10 @@ class CzscBase:
 
                 if last_xd['fx_mark'] == 'd':
                     if last_xd['value'] > bi2['value']:
-                        self._xd_list[-1] = bi2
+                        self._xd_list[-1] = xd
                 elif last_xd['fx_mark'] == 'g':
                     if last_xd['date'] < self._bi_list[-5]['date'] or self._xd_list[-2]['value'] > bi2['value']:
-                        self._xd_list.append(bi2)
+                        self._xd_list.append(xd)
                         return True
                 else:
                     raise ValueError
@@ -512,10 +563,10 @@ class CzscBase:
         if not self.update_new_bars():
             return
 
-        if not self.update_fx():
-            return
+        self.update_fx()
 
         # 至少两个分型才能形成笔
+        # todo 即使没有分型，bar 来了后也可以通过时间个价格来确认分型，不是必须等到分型出现，最后一笔用当前bar的最低或者最高点代替
         if not self.update_bi():
             return
 
@@ -1050,7 +1101,7 @@ def main_segment():
 
 
 def main_mongo():
-    czsc_mongo = CzscMongo(code='ap2105', freq='day')
+    czsc_mongo = CzscMongo(code='srl8', freq='day')
     czsc_mongo.run()
     czsc_mongo.draw()
 
