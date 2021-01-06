@@ -7598,42 +7598,13 @@ trade_date_sse = [
 
 def util_date_valid(date):
     """
-    explanation:
-        判断字符串格式(1982-05-11)
 
-    params:
-        * date->
-            含义: 日期
-            类型: str
-            参数支持: []
-
-    return:
-        bool
     """
     try:
         time.strptime(date, "%Y-%m-%d")
         return True
     except:
         return False
-
-
-def util_date_stamp(date):
-    """
-    explanation:
-        转换日期时间字符串为浮点数的时间戳
-
-    params:
-        * date->
-            含义: 日期时间
-            类型: str
-            参数支持: []
-
-    return:
-        time
-    """
-    datestr = str(date)[0:10]
-    date = time.mktime(time.strptime(datestr, '%Y-%m-%d'))
-    return date
 
 
 def util_date_stamp(date):

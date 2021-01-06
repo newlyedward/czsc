@@ -63,6 +63,7 @@ def kline_pro(kline: List[dict],
               fx: List[dict] = None,
               bi: List[dict] = None,
               xd: List[dict] = None,
+              zs: List[dict] = None,
               bs: List[dict] = None,
               title: str = "缠中说禅K线分析",
               width: str = "1400px",
@@ -73,6 +74,7 @@ def kline_pro(kline: List[dict],
     :param fx: 分型识别结果
     :param bi: 笔识别结果
     :param xd: 线段识别结果
+    :param zs: 中枢
     :param bs: 买卖点
     :param title: 图表标题
     :param width: 图表宽度
@@ -155,6 +157,7 @@ def kline_pro(kline: List[dict],
 
     ma5 = SMA(close, timeperiod=5)
     ma34 = SMA(close, timeperiod=34)
+    ma55 = SMA(close, timeperiod=55)
     ma233 = SMA(close, timeperiod=233)
 
     macd_bar = []
@@ -184,13 +187,20 @@ def kline_pro(kline: List[dict],
         xaxis_opts=grid0_xaxis_opts
     )
 
+    if zs:
+        data = [[{"xAxis": x['bi_list'][0]['date'], "yAxis": x['ZG']['value']},
+                 {"xAxis": x['bi_list'][-1]['date'], "yAxis": x['ZD']['value']}] for x in zs]
+        chart_k.set_series_opts(
+            markarea_opts=opts.MarkAreaOpts(is_silent=True, data=data)
+        )
+
     # 均线图
     # ------------------------------------------------------------------------------------------------------------------
     chart_ma = Line()
     chart_ma.add_xaxis(xaxis_data=dts)
 
-    ma_keys = {"MA5": ma5, "MA34": ma34, "MA233": ma233}
-    ma_colors = ["#39afe6", "#da6ee8", "#00940b"]
+    ma_keys = {"MA5": ma5, "MA34": ma34, "MA55": ma55,"MA233": ma233}
+    ma_colors = ["#39afe6", "#da6ee8", "#A02128", "#00940b"]
     for i, (name, ma) in enumerate(ma_keys.items()):
         chart_ma.add_yaxis(series_name=name, y_axis=ma, is_smooth=True,
                            is_selected=False, symbol_size=0, label_opts=label_not_show_opts,
@@ -251,9 +261,9 @@ def kline_pro(kline: List[dict],
         chart_k = chart_k.overlap(chart_xd)
 
     if bs:
-        b_dts = [x['dt'] for x in bs if x['mark'] == 'buy']
+        b_dts = [x['date'] for x in bs if x['bs'] == 'buy']
         if len(b_dts) > 0:
-            b_val = [x['price'] for x in bs if x['mark'] == 'buy']
+            b_val = [x['value'] for x in bs if x['bs'] == 'buy']
             chart_b = Scatter()
             chart_b.add_xaxis(b_dts)
             chart_b.add_yaxis(series_name="BUY", y_axis=b_val, is_selected=False, symbol="arrow", symbol_size=8,
@@ -262,9 +272,9 @@ def kline_pro(kline: List[dict],
             chart_b.set_global_opts(xaxis_opts=grid0_xaxis_opts, legend_opts=legend_not_show_opts)
             chart_k = chart_k.overlap(chart_b)
 
-        s_dts = [x['dt'] for x in bs if x['mark'] == 'sell']
+        s_dts = [x['date'] for x in bs if x['bs'] == 'sell']
         if len(s_dts) > 0:
-            s_val = [x['price'] for x in bs if x['mark'] == 'sell']
+            s_val = [x['value'] for x in bs if x['bs'] == 'sell']
             chart_s = Scatter()
             chart_s.add_xaxis(s_dts)
             chart_s.add_yaxis(series_name="SELL", y_axis=s_val, is_selected=False, symbol="pin", symbol_size=12,

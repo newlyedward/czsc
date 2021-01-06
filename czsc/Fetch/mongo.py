@@ -30,7 +30,7 @@ import pymongo
 from pandas import DataFrame
 
 from czsc import KlineAnalyze
-from czsc.ClUtils.ClTradeDate import util_get_real_date, trade_date_sse, util_date_valid, util_date_stamp
+from czsc.Utils.trade_date import util_get_real_date, trade_date_sse, util_date_valid, util_date_stamp
 
 uri = 'mongodb://localhost:27017/factor'
 client = pymongo.MongoClient(uri)
@@ -354,7 +354,7 @@ def save_future_bi_day(code, collection=FACTOR_DATABASE.future_bi_day):
 
         if len(ka_day.bi_list) < 3:
             logging.info(
-                'UPDATE_Future_BI_DAY \n No ClData updated {} from {} to {}'.format(code, start_date, datetime.today())
+                'UPDATE_Future_BI_DAY \n No Fetch updated {} from {} to {}'.format(code, start_date, datetime.today())
             )
         # 最后一个数据未确定，需要删除
         collection.insert_many(

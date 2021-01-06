@@ -5,3 +5,5 @@ from .echarts_plot import kline_pro, heat_map
 from .kline_generator import KlineGeneratorBy1Min, KlineGeneratorByTick
 from .ta import KDJ, MACD, EMA, SMA
 
+from czsc.Utils.logs import util_log_info
+
