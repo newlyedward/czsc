@@ -11,3 +11,4 @@ numba>=0.43.1
 setuptools~=51.1.0.post20201221
 pymongo~=3.11.2
 pika~=1.1.0
+zenlog~=1.1
