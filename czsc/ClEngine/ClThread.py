@@ -25,7 +25,7 @@
 import threading
 from queue import Queue
 
-from czsc.ClUtils.ClRandom import util_random_with_topic
+from czsc.Utils.ClRandom import util_random_with_topic
 
 """标准化的事件分发,可以快速引入和复用
 每个事件需要携带一个方法,并且是需要立即被执行的时间才能使用这个事件方法"""

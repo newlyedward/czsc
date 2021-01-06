@@ -14,7 +14,7 @@ sys.path.insert(0, "..")
 import czsc
 print(czsc.__version__)
 from czsc import KlineAnalyze
-from czsc.ClData.ts import get_kline
+from czsc.Fetch.ts import get_kline
 
 # 首次使用，需要在这里设置你的 tushare token，用于获取数据；在同一台机器上，tushare token 只需要设置一次
 # 没有 token，到 https://tushare.pro/register?reg=7 注册获取

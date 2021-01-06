@@ -22,8 +22,8 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 from czsc import KlineAnalyze
-from czsc.ClData.mongo import fetch_future_day
-from czsc.ClUtils import ka_to_echarts
+from czsc.Fetch.mongo import fetch_future_day
+from czsc.Utils import ka_to_echarts, kline_pro
 from pyecharts.charts import Tab
 import webbrowser
 
@@ -44,13 +44,17 @@ def use_kline_analyze():
     width = "1300px"
     height = "650px"
     chart_day = ka_to_echarts(ka_day, width, height)
+    # single = kline_pro(kline=ka_day.kline_raw)
 
-    tab = Tab()
-    tab.add(chart_day, "day")
+
+    # tab = Tab()
+    # tab.add(chart_day, "day")
+    # tab.render('ka_day.html')
+
     chart_day_html = 'ka_day.html'
-    tab.render('ka_day.html')
+    chart_day.render(chart_day_html)
 
-    webbrowser.open('ka_day.html')
+    webbrowser.open(chart_day_html)
 
 
 if __name__ == '__main__':

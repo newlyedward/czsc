@@ -9,7 +9,7 @@ from czsc.utils.kline_generator import KlineGeneratorBy1Min as KlineGenerator
 
 
 cur_path = os.path.split(os.path.realpath(__file__))[0]
-file_kline = os.path.join(cur_path, "ClData/000001.XSHG_1MIN.csv")
+file_kline = os.path.join(cur_path, "Fetch/000001.XSHG_1MIN.csv")
 kline = pd.read_csv(file_kline, encoding="utf-8")
 kline.loc[:, "dt"] = pd.to_datetime(kline.dt)
 

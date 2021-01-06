@@ -11,7 +11,7 @@ from czsc.signals import find_zs
 cur_path = os.path.split(os.path.realpath(__file__))[0]
 
 def test_ka_update():
-    file_kline = os.path.join(cur_path, "ClData/000001.SH_D.csv")
+    file_kline = os.path.join(cur_path, "Fetch/000001.SH_D.csv")
     kline = pd.read_csv(file_kline, encoding="utf-8")
     kline.loc[:, "dt"] = pd.to_datetime(kline.dt)
     kline1 = kline.iloc[:2000]
@@ -35,7 +35,7 @@ def test_ka_update():
     assert not ka3.xd_list
 
 def test_calculate_power():
-    file_kline = os.path.join(cur_path, "ClData/000001.SH_D.csv")
+    file_kline = os.path.join(cur_path, "Fetch/000001.SH_D.csv")
     kline = pd.read_csv(file_kline, encoding="utf-8")
     kline.loc[:, "dt"] = pd.to_datetime(kline.dt)
     ka = KlineAnalyze(kline, name="日线", max_count=1000, use_xd=True, verbose=False)
@@ -57,7 +57,7 @@ def test_calculate_power():
     assert int(last_bi_power) == 9291793337
 
 def test_kline_analyze():
-    file_kline = os.path.join(cur_path, "ClData/000001.SH_D.csv")
+    file_kline = os.path.join(cur_path, "Fetch/000001.SH_D.csv")
     kline = pd.read_csv(file_kline, encoding="utf-8")
     kline.loc[:, "dt"] = pd.to_datetime(kline.dt)
     ka = KlineAnalyze(kline, name="日线", max_count=1000, use_xd=True, verbose=False)
@@ -87,7 +87,7 @@ def test_kline_analyze():
         assert ka.kline_raw[-1]['close'] == x
 
 def test_update_ta():
-    file_kline = os.path.join(cur_path, "ClData/000001.SH_D.csv")
+    file_kline = os.path.join(cur_path, "Fetch/000001.SH_D.csv")
     kline = pd.read_csv(file_kline, encoding="utf-8")
     kline.loc[:, "dt"] = pd.to_datetime(kline.dt)
     ka = KlineAnalyze(kline, name="日线", max_count=1000, use_xd=True, verbose=False, use_ta=True)

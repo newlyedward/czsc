@@ -21,7 +21,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-from czsc.ClUtils.ClRandom import util_random_with_topic
+from czsc.Utils.ClRandom import util_random_with_topic
 """标准的QUANTAXIS事件方法,具有QA_Thread,QA_Event等特性,以及一些日志和外部接口"""
 
 

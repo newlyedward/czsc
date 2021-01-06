@@ -2,7 +2,7 @@
 
 import warnings
 
-from .ClUtils.ClTradeDate import util_date_stamp
+from .Utils.trade_date import util_date_stamp
 
 try:
     import talib as ta
@@ -10,10 +10,10 @@ except ImportError:
     ta_lib_hint = "没有安装 ta-lib !!! 请到 https://www.lfd.uci.edu/~gohlke/pythonlibs/#ta-lib " \
                   "下载对应版本安装，预计分析速度提升2倍"
     warnings.warn(ta_lib_hint)
-    from .ClUtils import ta
+    from .Utils import ta
 import pandas as pd
 import numpy as np
-from .ClUtils.plot import ka_to_image
+from .Utils.plot import ka_to_image
 
 
 def has_gap(k1, k2, min_gap=0.002):

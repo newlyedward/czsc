@@ -17,7 +17,7 @@ cur_path = os.path.split(os.path.realpath(__file__))[0]
 
 
 def test_kdj_cross():
-    file_kline = os.path.join(cur_path, "ClData/000001.SH_D.csv")
+    file_kline = os.path.join(cur_path, "Fetch/000001.SH_D.csv")
     kline = pd.read_csv(file_kline, encoding="utf-8")
     bars = kline.to_dict("records")
 

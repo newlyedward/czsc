@@ -34,10 +34,11 @@ from pyecharts.charts import Tab
 from czsc.ClPubSub.consumer import Subscriber
 from czsc.ClPubSub.producer import Publisher
 
-from czsc.ClData.mongo import fetch_future_day, FACTOR_DATABASE, fetch_future_bi_day
+from czsc.Fetch.mongo import FACTOR_DATABASE, fetch_future_bi_day
+from czsc.Fetch import fetch_future_day
 from czsc.ClEngine.ClThread import ClThread
-from czsc.ClUtils import kline_pro
-from czsc.ClUtils.ClTradeDate import util_get_next_day, util_get_trade_gap
+from czsc.Utils import kline_pro
+from czsc.Utils.trade_date import util_get_next_day, util_get_trade_gap
 
 
 class ClSimBar(ClThread):
@@ -542,7 +543,7 @@ class CzscMongo(CzscBase):
         else:
             start = '1990-01-01'
 
-        self.data = fetch_future_day(code, start)
+        self.data = fetch_future_day('tdx', code, start)
 
     def draw(self, chart_path=None):
         chart = kline_pro(
@@ -1049,7 +1050,7 @@ def main_segment():
 
 
 def main_mongo():
-    czsc_mongo = CzscMongo(code='srl8', freq='day')
+    czsc_mongo = CzscMongo(code='ap2105', freq='day')
     czsc_mongo.run()
     czsc_mongo.draw()
 

@@ -2,7 +2,7 @@
 
 from .analyze import KlineAnalyze
 from .signals import KlineSignals
-from .ClUtils.ta import SMA, EMA, MACD, KDJ
+from .Utils.ta import SMA, EMA, MACD, KDJ
 
 __version__ = "0.5.9"
 __author__ = "zengbin93"
