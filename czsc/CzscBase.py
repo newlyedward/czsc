@@ -375,48 +375,57 @@ class CzscBase:
         xd = bi2
         last_xd = self._xd_list[-1]
 
+        if bi3['date'] <= last_xd['date']:
+            return False
+
+        if bi3['date'] == pd.to_datetime('2019-03-29'):
+            print('error')
+
         if bi2['fx_mark'] == 'g':
+            # 分型确认
+            if bi1['value'] < bi2['value'] > bi3['value'] and self._bi_list[-5]['date'] > last_xd['date']:
+                # 向更高点延续
+                if last_xd['fx_mark'] == 'g' and last_xd['value'] < bi2['value']:
+                    self._xd_list[-1] = xd
+                    return False
+                # 笔段在分型确认时不能重合
+                elif last_xd['fx_mark'] == 'd':
+                    self._xd_list.append(xd)
+                    return True
 
             # 价格确认
-            if last_xd['fx_mark'] == 'g' and bi2['value'] > last_xd['value']:
-                self._xd_list[-1] = xd
+            # 相邻高点才能后移，如果有间隔要等待确认中间是否有段产生
+            if last_xd['fx_mark'] == 'g' and bi3['value'] > last_xd['value'] and bi2['date'] == last_xd['date']:
+                self._xd_list[-1] = bi3
                 return True
-
-            # 分型确认
-            if bi1['value'] < bi2['value'] > bi3['value']:
-                # 向更高点延续
-                if last_xd['fx_mark'] == 'g':
-                    if last_xd['value'] < bi2['value']:
-                        self._xd_list[-1] = xd
-                elif last_xd['fx_mark'] == 'd':
-                    # 线段和笔不重合
-                    if last_xd['date'] < self._bi_list[-5]['date'] or self._xd_list[-2]['value'] < bi2['value']:
-                        self._xd_list.append(xd)
-                        return True
-
-                else:
-                    raise ValueError
+            elif last_xd['fx_mark'] == 'd' and self._xd_list[-2]['value'] < bi2['value']:
+                # 线段和笔不重合
+                # if last_xd['date'] < self._bi_list[-5]['date'] or self._xd_list[-2]['value'] < bi2['value']:
+                self._xd_list.append(bi2)
+                return True
 
         # 笔出现底分型结构
         elif bi2['fx_mark'] == 'd':
 
+            # 分型确认
+            if bi1['value'] > bi2['value'] < bi3['value'] and self._bi_list[-5]['date'] > last_xd['date']:
+                if last_xd['fx_mark'] == 'd' and last_xd['value'] > bi2['value']:
+                    self._xd_list[-1] = xd
+                    return False
+                # 笔段在分型确认时不能重合
+                elif last_xd['fx_mark'] == 'g':
+                    self._xd_list.append(xd)
+                    return True
+
             # 价格确认
-            if last_xd['fx_mark'] == 'd' and bi2['value'] < last_xd['value']:
-                self._xd_list[-1] = xd
+            if last_xd['fx_mark'] == 'd' and bi3['value'] < last_xd['value'] and bi2['date'] == last_xd['date']:
+                self._xd_list[-1] = bi3
+                return False
+            elif last_xd['fx_mark'] == 'g' and self._xd_list[-2]['value'] > bi2['value']:
+                # if last_xd['date'] < self._bi_list[-5]['date'] or self._xd_list[-2]['value'] > bi3['value']:
+                self._xd_list.append(bi2)
                 return True
 
-            # 分型确认
-            if bi1['value'] > bi2['value'] < bi3['value']:
-
-                if last_xd['fx_mark'] == 'd':
-                    if last_xd['value'] > bi2['value']:
-                        self._xd_list[-1] = xd
-                elif last_xd['fx_mark'] == 'g':
-                    if last_xd['date'] < self._bi_list[-5]['date'] or self._xd_list[-2]['value'] > bi2['value']:
-                        self._xd_list.append(xd)
-                        return True
-                else:
-                    raise ValueError
         return False
 
     def update_zs(self):
@@ -1101,7 +1110,7 @@ def main_segment():
 
 
 def main_mongo():
-    czsc_mongo = CzscMongo(code='srl8', freq='day')
+    czsc_mongo = CzscMongo(code='pl8', freq='day')
     czsc_mongo.run()
     czsc_mongo.draw()
 
