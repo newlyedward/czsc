@@ -25,17 +25,15 @@ import json
 import logging
 import webbrowser
 
-from abc import ABCMeta, abstractmethod
 import datetime
 import pandas as pd
 import pymongo
-from pyecharts.charts import Tab
 
 from czsc.ClPubSub.consumer import Subscriber
 from czsc.ClPubSub.producer import Publisher
 
 from czsc.Fetch.mongo import FACTOR_DATABASE, fetch_future_bi_day
-from czsc.Fetch import fetch_future_day
+from czsc.Fetch.tdx import get_bar
 from czsc.ClEngine.ClThread import ClThread
 from czsc.Utils import kline_pro
 from czsc.Utils.trade_date import util_get_next_day, util_get_trade_gap
@@ -56,7 +54,7 @@ class ClSimBar(ClThread):
         else:
             logging.info('Wrong code format!')
 
-        self.frq = freq
+        self.freq = freq
 
         start = '1990-01-01' if start is None else start
         end = str(datetime.date.today()) if end is None else end
@@ -258,7 +256,7 @@ class CzscBase:
 
         # bi不需要考虑转折的分型强度
         bi.pop('fx_power')
-        bi.update(code=self.code)
+        bi.update(code=self.code)    # 存储数据库需要
         # 没有笔时.最开始两个分型作为第一笔，增量更新时从数据库取出两个端点构成的笔时确定的
         if len(self._bi_list) < 1:
             bi2 = self._fx_list[-2].copy()
@@ -273,6 +271,9 @@ class CzscBase:
         bar.update(value=bar['high'] if bar['direction'] == 'up' else bar['low'])
 
         trade_date = self._trade_date
+
+        # if bar['date'] >= pd.to_datetime('2020-8-20'):
+        #     print('error')
 
         # k 线确认模式
         if bar['date'] > bi['fx_end']:
@@ -579,11 +580,16 @@ class CzscBase:
 
     #  必须实现,每次输入一个行情数据，然后调用update看是否需要更新
     def on_bar(self, bar):
+        """
+        输入数据格式
+        Index(['open', 'high', 'low', 'close', 'amount', 'volume', 'date', 'code'], dtype='object')
+        'date' 未 timestamp  volume用来画图
+        """
         raise NotImplementedError
 
 
 class CzscMongo(CzscBase):
-    def __init__(self, code='rbl8', freq='day'):
+    def __init__(self, code='rbl8', freq='day', exchange=None):
         # 只处理一个品种
         super().__init__(code, freq)
 
@@ -596,7 +602,7 @@ class CzscMongo(CzscBase):
         else:
             start = '1990-01-01'
 
-        self.data = fetch_future_day('tdx', code, start)
+        self.data = get_bar(code, start, freq=freq, exchange=exchange)
 
     def draw(self, chart_path=None):
         chart = kline_pro(
@@ -614,8 +620,8 @@ class CzscMongo(CzscBase):
         date 默认为 Timestamp，主要时画图函数使用
         """
         bar = bar.to_dict()
-        if 'trade' in bar:
-            bar['vol'] = bar.pop('trade')
+        # if 'trade' in bar:
+        #     bar['vol'] = bar.pop('trade')
         # bar['date'] = pd.to_datetime(bar['date'])
         self._bars.append(bar)
 
@@ -1103,7 +1109,7 @@ def main_segment():
 
 
 def main_mongo():
-    czsc_mongo = CzscMongo(code='zcl8', freq='day')
+    czsc_mongo = CzscMongo(code='000001', freq='day', exchange='szse')
     czsc_mongo.run()
     czsc_mongo.draw()
 

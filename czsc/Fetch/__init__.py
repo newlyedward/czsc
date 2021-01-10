@@ -12,9 +12,9 @@ def use(package):
         return None
 
 
-def fetch_future_day(package, code, start=None, end=None):
+def get_bar(package, code, start=None, end=None, freq='day', exchange=None):
     engine = use(package)
-    if package in ['tdx', 'mongo']:
-        return engine.fetch_future_day(code, start, end)
+    if package in ['tdx']:
+        return engine.get_bar(code, start, end, freq=freq, exchange=None)
     else:
         return 'Unsupported packages'

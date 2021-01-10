@@ -149,7 +149,7 @@ def kline_pro(kline: List[dict],
     vol = []
     for i, row in enumerate(kline):
         item_style = red_item_style if row['close'] > row['open'] else green_item_style
-        bar = opts.BarItem(name=i, value=row['vol'], itemstyle_opts=item_style, label_opts=label_not_show_opts)
+        bar = opts.BarItem(name=i, value=row['volume'], itemstyle_opts=item_style, label_opts=label_not_show_opts)
         vol.append(bar)
 
     close = np.array([x['close'] for x in kline], dtype=np.double)

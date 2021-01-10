@@ -25,6 +25,7 @@
 # 从TDX磁盘空间读取数据
 import os
 import re
+from datetime import datetime
 
 import pandas as pd
 from pandas import DataFrame
@@ -80,7 +81,7 @@ def _get_sh_sz_list():
         '99': 'index',
         '50': 'fund',
         '51': 'fund',
-        '58': 'ETF',   # 科创板ETF
+        '58': 'ETF',  # 科创板ETF
         '20': 'bond',  # 国债逆回购
         '01': 'bond',
         '10': 'bond',
@@ -115,7 +116,7 @@ def _get_sh_sz_list():
         '10': 'bond',
         '11': 'bond',
         '12': 'bond',
-        '13': 'bond',   # 逆回购
+        '13': 'bond',  # 逆回购
         '18': 'reits',  # REITS
     }
     sz_df['instrument'] = sz_df.code.apply(lambda x: SZ_CODE_HEAD_TO_TYPE[x[:2]])
@@ -220,7 +221,10 @@ def _generate_path(code, freq, tdx_code):
     return file_path
 
 
-def get_bar(code, freq='day', exchange=None):
+def get_bar(code, start=None, end=None, freq='day', exchange=None):
+    """
+    股票成交量 volume 单位是100股
+    """
     code = code.upper()
     freq = freq.lower()
 
@@ -263,13 +267,27 @@ def get_bar(code, freq='day', exchange=None):
 
     if len(recorder) > 1:
         instrument = recorder.loc[recorder['tdx_code'] == tdx_code].loc[code, 'instrument']
+        exchange = recorder.loc[recorder['tdx_code'] == tdx_code].loc[code, 'exchange']
     else:
         instrument = recorder['instrument']
+        exchange = recorder['exchange']
 
     if instrument in ['future', 'option']:
         return df.rename(columns={'amount': "position", "jiesuan": "settle"})
 
+    if start:
+        start = pd.to_datetime(start)
+        df = df[df.index >= start]
+
+    if end:
+        end = pd.to_datetime(end)
+        df = df[df.index <= end]
+
+    df['date'] = df.index
+    df = df.assign(code=code, exchange=exchange)
+
     return df
+
 
 if __name__ == "__main__":
     # ds_df = _get_ds_list()
