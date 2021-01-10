@@ -107,9 +107,10 @@ def kline_pro(kline: List[dict],
 
     axis_pointer_opts = opts.AxisPointerOpts(is_show=True, link=[{"xAxisIndex": "all"}])
 
-    dz_inside = opts.DataZoomOpts(False, "inside", xaxis_index=[0, 1, 2], range_start=80, range_end=100)
+    range_start = int(100-216 / len(kline) * 100)
+    dz_inside = opts.DataZoomOpts(False, "inside", xaxis_index=[0, 1, 2], range_start=range_start, range_end=100)
     dz_slider = opts.DataZoomOpts(True, "slider", xaxis_index=[0, 1, 2], pos_top="96%",
-                                  pos_bottom="0%", range_start=80, range_end=100)
+                                  pos_bottom="0%", range_start=range_start, range_end=100)
 
     yaxis_opts = opts.AxisOpts(is_scale=True,
                                axislabel_opts=opts.LabelOpts(color="#c7c7c7", font_size=8, position="inside"))
@@ -199,7 +200,7 @@ def kline_pro(kline: List[dict],
     chart_ma = Line()
     chart_ma.add_xaxis(xaxis_data=dts)
 
-    ma_keys = {"MA5": ma5, "MA34": ma34, "MA55": ma55,"MA233": ma233}
+    ma_keys = {"MA5": ma5, "MA34": ma34, "MA55": ma55, "MA233": ma233}
     ma_colors = ["#39afe6", "#da6ee8", "#A02128", "#00940b"]
     for i, (name, ma) in enumerate(ma_keys.items()):
         chart_ma.add_yaxis(series_name=name, y_axis=ma, is_smooth=True,

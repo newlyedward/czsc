@@ -601,6 +601,7 @@ class CzscBase:
         return False
 
     def update(self, bar):
+        # 有包含关系时，不可能有分型出现，不出现分型时才需要
         if not self.update_new_bars():
             return
 
@@ -611,7 +612,7 @@ class CzscBase:
         if not self.update_bi():
             return
 
-        # 新增笔才处理段
+        # 新增确定性的笔才处理段
         self.update_xd()
 
         if not self.update_zs():
@@ -646,8 +647,10 @@ class CzscMongo(CzscBase):
     def draw(self, chart_path=None):
         chart = kline_pro(
             kline=self._bars, fx=self._fx_list, bi=self._bi_list,
-            zs=self._zs_list, bs=self._sig_list, xd=self._xd_list
+            zs=self._zs_list, bs=self._sig_list, xd=self._xd_list,
+            title=self.code, width='2500px', height='850px'
         )
+
         if not chart_path:
             chart_path = '{}.html'.format(self.code)
         chart.render(chart_path)
@@ -1037,7 +1040,7 @@ def main_consumer():
 
 
 def main_mongo():
-    czsc_mongo = CzscMongo(code='600633', freq='day', exchange='sse')
+    czsc_mongo = CzscMongo(code='600048', freq='day', exchange='sse')
     czsc_mongo.run()
     czsc_mongo.draw()
 

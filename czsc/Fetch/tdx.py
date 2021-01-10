@@ -135,7 +135,8 @@ def _get_ds_list():
     47#TS2009.day   期货    ('28', 'AP2003')
     7#IO760795.day  期权    ('7', 'IO760795')
     5#V 7C0D49.day  期权 中间有空格，特殊处理
-    pattern = "^(?P<tdx_code>\d{1,2})#(?P<code>.+)\.day"
+    102#980001.day  102 国证指数
+    pattern = "^(?P<tdx_code>\d{1,3})#(?P<code>.+)\.day"
     """
     DS_CODE_TO_TYPE = {
         '4': {'exchange': 'czce', 'instrument': 'option'},
@@ -148,13 +149,17 @@ def _get_ds_list():
         '29': {'exchange': 'dce', 'instrument': 'future'},
         '30': {'exchange': 'shfe', 'instrument': 'future'},
         '47': {'exchange': 'cffex', 'instrument': 'future'},
+        '102': {'exchange': 'sse szse', 'instrument': 'index'},
     }
     ds_dir = '{}{}{}'.format(_DS_DIR, os.sep, 'lday')
     ds_list = os.listdir(ds_dir)
 
-    pattern = "^(?P<tdx_code>\d{1,2})#(?P<code>.+)\.day"
+    pattern = "^(?P<tdx_code>\d{1,3})#(?P<code>.+)\.day"
     data = [re.match(pattern, x) for x in ds_list]
-    try:
+    try:    # 注释条码用来显示pattern不能识别的文件名
+        # for i, x in enumerate(data):
+        #     if not x:
+        #         util_log_info('{}'.format(ds_list[i]))
         ds_df = pd.DataFrame([x.groupdict() for x in data])
     except:
         util_log_info("{} can't be analyzed by pattern ({}) }".format(_DS_DIR, pattern))
