@@ -35,7 +35,7 @@ from czsc.ClPubSub.producer import Publisher
 from czsc.Fetch.mongo import FACTOR_DATABASE, fetch_future_bi_day
 from czsc.Fetch.tdx import get_bar
 from czsc.ClEngine.ClThread import ClThread
-from czsc.Utils import kline_pro
+from czsc.Utils import kline_pro, util_log_info
 from czsc.Utils.trade_date import util_get_next_day, util_get_trade_gap
 
 
@@ -272,9 +272,6 @@ class CzscBase:
 
         trade_date = self._trade_date
 
-        # if bar['date'] >= pd.to_datetime('2020-8-20'):
-        #     print('error')
-
         # k 线确认模式
         if bar['date'] > bi['fx_end']:
             # 时间确认,函数算了首尾，所以要删除，todo 包含的情况程序走不到这里
@@ -307,7 +304,7 @@ class CzscBase:
                 self._bi_list[-1] = bar
                 return False
 
-        # 非分型结尾笔，直接替换成分型, 没有新增笔，后续不需要处理
+        # 非分型结尾笔，直接替换成分型, 没有新增笔，后续不需要处理，同一个端点确认
         if 'fx_mark' not in last_bi or bi['date'] == last_bi['date']:
             self._bi_list[-1] = bi
             return False
@@ -323,6 +320,30 @@ class CzscBase:
             kn_inside = trade_date.index(bi['fx_start']) - trade_date.index(last_bi['fx_end']) - 1
 
             if kn_inside > 0:  # 两个分型间至少有1根k线，端点有可能不是高低点
+                index = -2
+                while self._fx_list[index]['date'] > last_bi['date']:
+
+                    # if bi['fx_mark'] == self._fx_list[index]['fx_mark']:
+                    #     if bi['fx_mark'] == 'd' and bi['value'] > self._fx_list[index]['value']:
+
+                    if (bi['fx_mark'] == 'd' and 'd' == self._fx_list[index]['fx_mark']
+                            and bi['value'] > self._fx_list[index]['value']) \
+                        or (bi['fx_mark'] == 'g' and 'g' == self._fx_list[index]['fx_mark']
+                            and bi['value'] < self._fx_list[index]['value']):
+                        bi = self._fx_list[index].copy()
+
+                    # if (bi['fx_mark'] == 'd' and 'd' == self._fx_list[index]['fx_mark']
+                    #         and bi['value'] > self._fx_list[index]['value']) \
+                    #     or (bi['fx_mark'] == 'g' and 'g' == self._fx_list[index]['fx_mark']
+                    #         and bi['value'] < self._fx_list[index]['value']):
+                    #     bi = self._fx_list[index].copy()
+                    #     print('try')
+
+                    index = index - 1
+                if 'fx_power' in bi:
+                    bi.pop('fx_power')
+                    bi.update(code=self.code)  # 存储数据库需要
+
                 self._bi_list.append(bi)
                 return True
 
@@ -379,7 +400,7 @@ class CzscBase:
 
         # todo 只用assert?
         if xd['date'] <= last_xd['date'] or 'fx_mark' not in xd:
-            print('last {} and now {}'.format(last_xd['date'], xd['date']))
+            # print('last {} and now {}'.format(last_xd['date'], xd['date']))
             return False
 
         if xd['fx_mark'] == 'g':
@@ -397,6 +418,10 @@ class CzscBase:
                 elif bi4['date'] > last_xd['date'] and xd['value'] > bi4['value']:
                     index = -6
                     bi = self._bi_list[index]
+                    # 前一个高点没有碰到段前面一个低点
+                    if bi['date'] < last_xd['date'] and self._bi_list[index-1]['value'] > bi4['value']:
+                        return False
+
                     while bi['date'] > last_xd['date']:
                         if xd['value'] < bi['value']:
                             xd = bi
@@ -419,6 +444,10 @@ class CzscBase:
                 elif bi4['date'] > last_xd['date'] and xd['value'] < bi4['value']:
                     index = -6
                     bi = self._bi_list[index]
+                    # 前一个低点没有碰到段前面一高低点
+                    if bi['date'] < last_xd['date'] and self._bi_list[index - 1]['value'] < bi4['value']:
+                        return False
+
                     while bi['date'] > last_xd['date']:
                         if xd['value'] > bi['value']:
                             xd = bi
