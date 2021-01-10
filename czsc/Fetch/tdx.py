@@ -278,7 +278,7 @@ def get_bar(code, start=None, end=None, freq='day', exchange=None):
         exchange = recorder['exchange']
 
     if instrument in ['future', 'option']:
-        return df.rename(columns={'amount': "position", "jiesuan": "settle"})
+        df.rename(columns={'amount': "position", "jiesuan": "settle"})
 
     if start:
         start = pd.to_datetime(start)
