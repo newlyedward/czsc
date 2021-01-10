@@ -302,7 +302,7 @@ class CzscBase:
                     self._bi_list.append(bar)
                     return True
 
-            else: # 原有未出现分型笔的延续，todo,只能替代原趋势，需要增加assert
+            else:  # 原有未出现分型笔的延续，todo,只能替代原趋势，需要增加assert
                 assert bar['direction'] == last_bi['direction']
                 self._bi_list[-1] = bar
                 return False
@@ -372,11 +372,7 @@ class CzscBase:
             self._xd_list = xd_list
             return True
 
-        # bi1, bi2, bi3 = self._bi_list[-6], self._bi_list[-4].copy(), self._bi_list[-2]
-
-        # bi5 = self._bi_list[-5]
         bi4 = self._bi_list[-4]
-        # bi3 = self._bi_list[-3]
         xd = self._bi_list[-2]
         last_xd = self._xd_list[-1]
         xd2 = self._xd_list[-2]
@@ -397,8 +393,15 @@ class CzscBase:
                 if xd['value'] > xd2['value']:
                     self._xd_list.append(xd)
                     return True
-                # 出现三笔破坏线段，连续两笔，一笔比一笔高
+                # 出现三笔破坏线段，连续两笔，一笔比一笔高,寻找段之间的最高点
                 elif bi4['date'] > last_xd['date'] and xd['value'] > bi4['value']:
+                    index = -6
+                    bi = self._bi_list[index]
+                    while bi['date'] > last_xd['date']:
+                        if xd['value'] < bi['value']:
+                            xd = bi
+                        index = index - 2
+                        bi = self._bi_list[index]
                     self._xd_list.append(xd)
                     return True
         elif xd['fx_mark'] == 'd':
@@ -412,8 +415,15 @@ class CzscBase:
                 if xd['value'] < xd2['value']:
                     self._xd_list.append(xd)
                     return True
-                # 出现三笔破坏线段，连续两笔，一笔比一笔低
+                # 出现三笔破坏线段，连续两笔，一笔比一笔低,将最低的一笔作为段的起点，避免出现最低点不是端点的问题
                 elif bi4['date'] > last_xd['date'] and xd['value'] < bi4['value']:
+                    index = -6
+                    bi = self._bi_list[index]
+                    while bi['date'] > last_xd['date']:
+                        if xd['value'] > bi['value']:
+                            xd = bi
+                        index = index-2
+                        bi = self._bi_list[index]
                     self._xd_list.append(xd)
                     return True
         return False
@@ -996,120 +1006,9 @@ def main_consumer():
     # tab.render(chart_path)
     webbrowser.open(chart_path)
 
-    # tab = Tab()
-    # tab.add(chart, "day")
-    # tab.render('{}.html'.format(czsc.code))
-    # czsz.get_fx.to_csv('segments.csv')
-
-
-def QA_indicator_SEGMENT(DataFrame, *args, **kwargs):
-    """MA_VOLU
-
-    Arguments:
-        DataFrame {[type]} -- [description]
-
-    Returns:
-        [type] -- [description]
-    """
-    segments = []
-    for index, row in DataFrame.reset_index().iterrows():
-        try:
-            segment = {
-                'datetime': row['date'],
-                'code': row['code'],
-                'high': row['high'],
-                'low': row['low'],
-            }
-        except:
-            segment = {
-                'datetime': row['datetime'],
-                'code': row['code'],
-                'high': row['high'],
-                'low': row['low'],
-            }
-
-        idx = len(segments)
-
-        if idx == 0:
-            segments.append(segment)
-            continue
-
-        pre_segment = segments[-1]
-
-        # 如果由于处理包含关系产生的高低点不存在的话，直接去前一根K线的高低点
-        real_high_index = pre_segment.get('real_high_index', index - 1)
-        real_low_index = pre_segment.get('real_low_index', index - 1)
-
-        pre_high = segments[real_high_index]['high']
-        pre_low = segments[real_low_index]['low']
-        pre_trend = pre_segment.get('trend')
-
-        trend = identify_trend(segment['high'], segment['low'], pre_high, pre_low)
-        if trend in ['up', 'down']:
-            segment.update(trend=trend)
-
-        if trend not in ['up', 'down']:
-            segment.update(trend=pre_trend)
-
-        if pre_trend is None:
-            # 初始存在包含关系，用最短的那根k线作为基准，起点的高低点会有误差
-            if trend == 'include':
-                segment.update(real_high_index=real_high_index, real_low_index=real_low_index)
-            # 出现趋势就可以确认顶底
-            elif trend == 'up':
-                segment.update(type='bottom')
-            elif trend == 'down':
-                segment.update(type='peak')
-            else:
-                pass
-        elif pre_trend == 'up':
-            if trend == 'down':
-                segment.update(type='peak')
-                segment.update(real_high_index=pre_segment.get('real_high_index', - 1))
-            elif trend == 'include':
-                segment.update(real_low_index=pre_segment.get('real_low_index', - 1) - 1)
-                # todo 需要判断高点是否比前一笔的高点高，如果高，新的笔形成
-            elif trend == 'included':
-                segment.update(real_high_index=pre_segment.get('real_high_index', - 1) - 1)
-            else:
-                pass
-        elif pre_trend == 'down':
-            if trend == 'up':
-                segment.update(type='bottom')
-                segment.update(real_low_index=pre_segment.get('real_low_index', - 1))
-            elif trend == 'include':
-                segment.update(real_high_index=pre_segment.get('real_high_index', - 1) - 1)
-                # todo 需要判断高点是否比前一笔的高点高，如果高，新的笔形成
-            elif trend == 'included':
-                segment.update(real_low_index=pre_segment.get('real_low_index', - 1) - 1)
-            else:
-                pass
-        else:
-            pass
-
-        segments.append(segment)
-
-    return pd.DataFrame(segments)
-
-
-def main_segment():
-    """
-    测试使用
-    :return:
-    """
-    code = 'RBL8'
-    start = '2020-01-01'
-    # bar = QA_quotation(code, start, end=None, source=DATASOURCE.MONGO,
-    #                    freq=FREQUENCE.DAY, market=MARKET_TYPE.FUTURE_CN,
-    #                    output=OUTPUT_FORMAT.DATAFRAME)
-    bar = fetch_future_day(code, start)
-
-    segments = QA_indicator_SEGMENT(bar)
-    segments.to_csv('segments.csv')
-
 
 def main_mongo():
-    czsc_mongo = CzscMongo(code='000001', freq='day', exchange='szse')
+    czsc_mongo = CzscMongo(code='600633', freq='day', exchange='sse')
     czsc_mongo.run()
     czsc_mongo.draw()
 
