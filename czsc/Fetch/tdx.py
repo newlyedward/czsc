@@ -81,14 +81,16 @@ def _get_sh_sz_list():
         '99': 'index',
         '50': 'fund',
         '51': 'fund',
-        '58': 'ETF',  # 科创板ETF
+        '58': 'ETF',   # 科创板ETF
         '20': 'bond',  # 国债逆回购
-        '01': 'bond',
+        '01': 'bond',  # 贴债
+        '02': 'bond',
         '10': 'bond',
         '11': 'bond',
         '12': 'bond',
         '13': 'bond',
         '14': 'bond',
+        '75': 'bond',
     }
 
     sh_df['instrument'] = sh_df.code.apply(lambda x: SH_CODE_HEAD_TO_TYPE[x[:2]])
@@ -117,7 +119,10 @@ def _get_sh_sz_list():
         '11': 'bond',
         '12': 'bond',
         '13': 'bond',  # 逆回购
+        '14': 'bond',  # 贴息国债，就一个品种
+        '38': 'bond',  # 贴息国债，就一个品种
         '18': 'reits',  # REITS
+        '08': 'unknown',
     }
     sz_df['instrument'] = sz_df.code.apply(lambda x: SZ_CODE_HEAD_TO_TYPE[x[:2]])
 
@@ -177,8 +182,8 @@ def _get_tdx_code_from_security_dataframe(code, exchange):
         util_log_info("Can't get tdx_code from {}".format(code))
         return
 
-    if len(recorder) < 2:
-        return recorder.loc[:, 'tdx_code']
+    if isinstance(recorder, pd.Series):
+        return recorder['tdx_code']
 
     try:
         return recorder.loc[recorder['exchange'] == exchange].loc[code, 'tdx_code']
@@ -265,7 +270,7 @@ def get_bar(code, start=None, end=None, freq='day', exchange=None):
 
     recorder = SECURITY_DATAFRAME.loc[code]
 
-    if len(recorder) > 1:
+    if isinstance(recorder, pd.DataFrame):
         instrument = recorder.loc[recorder['tdx_code'] == tdx_code].loc[code, 'instrument']
         exchange = recorder.loc[recorder['tdx_code'] == tdx_code].loc[code, 'exchange']
     else:
@@ -294,4 +299,4 @@ if __name__ == "__main__":
     # sz_sh_df = _get_sh_sz_list()
     # security_df = get_security_list()
     # hq = fetch_future_day('rbl8')
-    hq = get_bar('000001')
+    hq = get_bar('600633')
