@@ -87,6 +87,452 @@ class ClSimBar(ClThread):
             producer.pub('TERMINATED')
 
 
+def identify_direction(v1, v2):
+    if v1 > v2:  # 前面几根可能都是包含，这里直接初始赋值down
+        direction = "up"
+    else:
+        direction = "down"
+    return direction
+
+
+def update_new_bars(bars, new_bars: list, trade_date: list):
+    assert len(bars) > 0
+    bar = bars[-1].copy()
+
+    trade_date.append(bar['date'])
+    # 第1根K线没有方向,不需要任何处理
+    if len(bars) < 2:
+        new_bars.append(bar)
+        return False
+
+    last_bar = new_bars[-1]
+
+    cur_h, cur_l = bar['high'], bar['low']
+    last_h, last_l, last_dt = last_bar['high'], last_bar['low'], last_bar['date']
+
+    # 处理过包含关系，只需要用一个值识别趋势
+    direction = identify_direction(cur_h, last_h)
+
+    # 第2根K线只需要更新方向
+    if len(bars) < 3:
+        bar.update(direction=direction)
+        new_bars.append(bar)
+        return False
+
+    # 没有包含关系，需要进行分型识别，趋势有可能改变
+    if (cur_h > last_h and cur_l > last_l) or (cur_h < last_h and cur_l < last_l):
+        bar.update(direction=direction)
+        new_bars.append(bar)
+        return True
+
+    last_direction = last_bar.get('direction')
+
+    # 有包含关系，不需要进行分型识别，趋势不改变
+    # if (cur_h <= last_h and cur_l >= last_l) or (cur_h >= last_h and cur_l <= last_l):
+    new_bars.pop(-1)  # 有包含关系的前一根数据被删除，这里是个技巧,todo 但会导致实际的高低点消失,只能低级别取处理
+    # 有包含关系，按方向分别处理,同时需要更新日期
+    if last_direction == "up":
+        if cur_h < last_h:
+            bar.update(high=last_h, date=last_dt)
+        if cur_l < last_l:
+            bar.update(low=last_l)
+    elif last_direction == "down":
+        if cur_l > last_l:
+            bar.update(low=last_l, date=last_dt)
+        if cur_h > last_h:
+            bar.update(high=last_h)
+    else:
+        logging.error('{} last_direction: {} is wrong'.format(last_dt, last_direction))
+        raise ValueError
+
+    # 和前一根K线方向一致
+    bar.update(direction=last_direction)
+
+    new_bars.append(bar)
+    return False
+
+
+def update_fx(new_bars: list, fx_list: list):
+    """更新分型序列
+    分型记对象样例：
+     {
+         'date': Timestamp('2020-11-26 00:00:00'),
+          'fx_mark': 'd',
+          'value': 138.0,
+          'fx_start': Timestamp('2020-11-25 00:00:00'),
+          'fx_end': Timestamp('2020-11-27 00:00:00'),
+          'direction': 'up',
+          'fx_power': 'weak'
+      }
+
+     {
+         'date': Timestamp('2020-11-26 00:00:00'),
+          'fx_mark': 'g',
+          'value': 150.67,
+          'fx_start': Timestamp('2020-11-25 00:00:00'),
+          'fx_end': Timestamp('2020-11-27 00:00:00'),
+          'direction': 'down',
+          'fx_power': 'strong'
+      }
+    """
+    # 至少3根k线才能确定分型
+    assert len(new_bars) >= 3
+
+    bar1, bar2, bar3 = new_bars[-3], new_bars[-2], new_bars[-1]
+    bar1_mid = (bar1['high'] - bar1['low']) / 2 + bar1['low']
+
+    if bar1['high'] < bar2['high'] > bar3['high']:
+        fx = {
+            "date": bar2['date'],
+            "fx_mark": "g",
+            "value": bar2['high'],
+            "fx_start": bar1['date'],  # 记录分型的开始和结束时间
+            "fx_end": bar3['date'],
+            "direction": bar3['direction'],
+            'fx_power': 'strong' if bar3['close'] < bar1_mid else 'weak'
+        }
+        fx_list.append(fx)
+        return True
+
+    elif bar1['low'] > bar2['low'] < bar3['low']:
+        fx = {
+            "date": bar2['date'],
+            "fx_mark": "d",
+            "value": bar2['low'],
+            "fx_start": bar1['date'],
+            "fx_end": bar3['date'],
+            "direction": bar3['direction'],
+            'fx_power': 'strong' if bar3['close'] > bar1_mid else 'weak',
+        }
+        fx_list.append(fx)
+        return True
+    else:
+        return False
+
+
+def update_bi(new_bars: list, fx_list: list, bi_list: list, trade_date: list):
+    """更新笔序列
+    笔标记对象样例：和分型标记序列结构一样
+     {
+         'date': Timestamp('2020-11-26 00:00:00'),
+         'code': code,
+          'fx_mark': 'd',
+          'value': 138.0,
+          'fx_start': Timestamp('2020-11-25 00:00:00'),
+          'fx_end': Timestamp('2020-11-27 00:00:00'),
+          'direction': 'up'
+      }
+
+     {
+         'date': Timestamp('2020-11-26 00:00:00'),
+         'code': code,
+          'fx_mark': 'g',
+          'value': 150.67,
+          'fx_start': Timestamp('2020-11-25 00:00:00'),
+          'fx_end': Timestamp('2020-11-27 00:00:00'),
+          'direction': 'down'
+      }
+    """
+    # 每根k线都要对bi进行判断
+    if len(fx_list) < 2:
+        return False
+
+    bi = fx_list[-1].copy()
+
+    # bi不需要考虑转折的分型强度
+    bi.pop('fx_power')
+    # bi.update(code=self.code)  # 存储数据库需要
+    # 没有笔时.最开始两个分型作为第一笔，增量更新时从数据库取出两个端点构成的笔时确定的
+    if len(bi_list) < 1:
+        bi2 = fx_list[-2].copy()
+        bi2.pop('fx_power')
+        # bi2.update(code=self.code)
+        bi_list.append(bi2)
+        bi_list.append(bi)
+        return False
+
+    last_bi = bi_list[-1]
+
+    bar = new_bars[-1].copy()
+    bar.update(value=bar['high'] if bar['direction'] == 'up' else bar['low'])
+
+    # k 线确认模式
+    if bar['date'] > bi['fx_end']:
+        # 时间确认,函数算了首尾，所以要删除，todo 包含的情况程序走不到这里
+        if 'fx_mark' in last_bi:
+            # 趋势延续替代,首先确认是否延续
+            if (last_bi['fx_mark'] == 'g' and bar['high'] > last_bi['value']) \
+                    or (last_bi['fx_mark'] == 'd' and bar['low'] < last_bi['value']):
+                bi_list[-1] = bar
+                return False
+
+            kn_inside = trade_date.index(bar['date']) - trade_date.index(last_bi['fx_end']) - 1
+
+            # 必须被和笔方向相同趋势的k线代替，相反方向的会形成分型，由分型处理
+            if kn_inside > 2 and bar['direction'] == last_bi['direction']:  # 两个分型间至少有1根k线，端点有可能不是高低点
+                bi_list.append(bar)
+                return True
+
+            # 只有一个端点，没有价格确认
+            if len(bi_list) < 2:
+                return False
+
+            # 价格确认
+            if (last_bi['fx_mark'] == 'd' and bar['high'] > bi_list[-2]['value']) \
+                    or (last_bi['fx_mark'] == 'g' and bar['low'] < bi_list[-2]['value']):
+                bi_list.append(bar)
+                return True
+
+        else:  # 原有未出现分型笔的延续，todo,只能替代原趋势，需要增加assert
+            assert bar['direction'] == last_bi['direction']
+            bi_list[-1] = bar
+            return False
+
+    # 非分型结尾笔，直接替换成分型, 没有新增笔，后续不需要处理，同一个端点确认
+    if 'fx_mark' not in last_bi or bi['date'] == last_bi['date']:
+        bi_list[-1] = bi
+        return False
+
+    # 分型处理，连续高低点处理，只判断是否后移,没有增加笔，不需要处理
+    if last_bi['fx_mark'] == bi['fx_mark']:
+        if (last_bi['fx_mark'] == 'g' and last_bi['value'] < bi['value']) \
+                or (last_bi['fx_mark'] == 'd' and last_bi['value'] > bi['value']):
+            bi_list[-1] = bi
+            return False
+    else:  # 笔确认是条件1、时间破坏，两个不同分型间至少有一根K线，2、价格破坏，向下的一笔破坏了上一笔的低点
+        # 时间确认,函数算了首尾，所以要删除
+        kn_inside = trade_date.index(bi['fx_start']) - trade_date.index(last_bi['fx_end']) - 1
+
+        if kn_inside > 0:  # 两个分型间至少有1根k线，端点有可能不是高低点
+            index = -2
+            while fx_list[index]['date'] > last_bi['date']:
+
+                # if bi['fx_mark'] == self._fx_list[index]['fx_mark']:
+                #     if bi['fx_mark'] == 'd' and bi['value'] > self._fx_list[index]['value']:
+
+                if (bi['fx_mark'] == 'd' and 'd' == fx_list[index]['fx_mark']
+                    and bi['value'] > fx_list[index]['value']) \
+                        or (bi['fx_mark'] == 'g' and 'g' == fx_list[index]['fx_mark']
+                            and bi['value'] < fx_list[index]['value']):
+                    bi = fx_list[index].copy()
+
+                # if (bi['fx_mark'] == 'd' and 'd' == self._fx_list[index]['fx_mark']
+                #         and bi['value'] > self._fx_list[index]['value']) \
+                #     or (bi['fx_mark'] == 'g' and 'g' == self._fx_list[index]['fx_mark']
+                #         and bi['value'] < self._fx_list[index]['value']):
+                #     bi = self._fx_list[index].copy()
+                #     print('try')
+
+                index = index - 1
+            if 'fx_power' in bi:
+                bi.pop('fx_power')
+                # bi.update(code=self.code)  # 存储数据库需要
+
+            bi_list.append(bi)
+            return True
+
+        # 只有一个端点，没有价格确认
+        if len(bi_list) < 2:
+            return False
+
+        # 价格确认
+        if (bi['fx_mark'] == 'g' and bi['value'] > bi_list[-2]['value']) \
+                or (bi['fx_mark'] == 'd' and bi['value'] < bi_list[-2]['value']):
+            bi_list.append(bi)
+            return True
+
+
+def update_xd(bi_list: list, xd_list: list):
+    """更新笔分型序列
+    分型记对象样例：
+     {
+         'date': Timestamp('2020-11-26 00:00:00'),
+          'fx_mark': 'd',
+          'value': 138.0,
+          'fx_start': Timestamp('2020-11-25 00:00:00'),
+          'fx_end': Timestamp('2020-11-27 00:00:00'),
+          'direction': 'up',
+          'fx_power': 'weak'
+      }
+
+     {
+         'date': Timestamp('2020-11-26 00:00:00'),
+          'fx_mark': 'g',
+          'value': 150.67,
+          'fx_start': Timestamp('2020-11-25 00:00:00'),
+          'fx_end': Timestamp('2020-11-27 00:00:00'),
+          'direction': 'down',
+          'fx_power': 'strong'
+      }
+    """
+    # 至少3根同类型分型才可能出现线段，最后1根bi不确定，因此最后一段也不确定
+    if len(bi_list) < 5:
+        return False
+
+    if len(xd_list) < 1:
+        # 线段不存在，初始化线段，找4个点的最高和最低点组成线段
+        bi_list = bi_list[:-1].copy()
+        bi_list = sorted(bi_list, key=lambda x: x['value'], reverse=False)
+        if bi_list[0]['date'] < bi_list[-1]['date']:
+            xd_list.append(bi_list[0])
+            xd_list.append(bi_list[-1])
+        else:
+            xd_list.append(bi_list[-1])
+            xd_list.append(bi_list[0])
+        return True
+
+    bi4 = bi_list[-4]
+    xd = bi_list[-2]
+    last_xd = xd_list[-1]
+    xd2 = xd_list[-2]
+
+    # todo 只用assert?
+    if xd['date'] <= last_xd['date'] or 'fx_mark' not in xd:
+        # print('last {} and now {}'.format(last_xd['date'], xd['date']))
+        return False
+
+    if xd['fx_mark'] == 'g':
+        # 同向延续
+        if last_xd['fx_mark'] == 'g' and xd['value'] > last_xd['value']:
+            xd_list[-1] = xd
+            return False
+        # 反向判断
+        elif last_xd['fx_mark'] == 'd':
+            # 价格判断
+            if xd['value'] > xd2['value']:
+                xd_list.append(xd)
+                return True
+            # 出现三笔破坏线段，连续两笔，一笔比一笔高,寻找段之间的最高点
+            elif bi4['date'] > last_xd['date'] and xd['value'] > bi4['value']:
+                index = -6
+                bi = bi_list[index]
+                # 前一个高点没有碰到段前面一个低点
+                if bi['date'] < last_xd['date'] and bi_list[index - 1]['value'] > bi4['value']:
+                    return False
+
+                while bi['date'] > last_xd['date']:
+                    if xd['value'] < bi['value']:
+                        xd = bi
+                    index = index - 2
+                    bi = bi_list[index]
+                xd_list.append(xd)
+                return True
+    elif xd['fx_mark'] == 'd':
+        # 同向延续
+        if last_xd['fx_mark'] == 'd' and xd['value'] < last_xd['value']:
+            xd_list[-1] = xd
+            return False
+        # 反向判断
+        elif last_xd['fx_mark'] == 'g':
+            # 价格判断
+            if xd['value'] < xd2['value']:
+                xd_list.append(xd)
+                return True
+            # 出现三笔破坏线段，连续两笔，一笔比一笔低,将最低的一笔作为段的起点，避免出现最低点不是端点的问题
+            elif bi4['date'] > last_xd['date'] and xd['value'] < bi4['value']:
+                index = -6
+                bi = bi_list[index]
+                # 前一个低点没有碰到段前面一高低点
+                if bi['date'] < last_xd['date'] and bi_list[index - 1]['value'] < bi4['value']:
+                    return False
+
+                while bi['date'] > last_xd['date']:
+                    if xd['value'] > bi['value']:
+                        xd = bi
+                    index = index - 2
+                    bi = bi_list[index]
+                xd_list.append(xd)
+                return True
+    return False
+
+
+def update_zs(bi_list: list, zs_list: list):
+    """
+    {
+          'zs_start': 进入段的起点
+          'zs_end':  离开段的终点
+          'ZG': 中枢高点,
+          'ZD': 中枢低点,
+          'GG': 中枢最低点,
+          'DD': 中枢最高点，
+          'bi_list': list[dict]   与中枢方向相反的特征笔序列
+      }
+    """
+    if len(zs_list) < 1:
+        assert len(bi_list) < 4
+        zg = bi_list[0] if bi_list[0]['fx_mark'] == 'g' else bi_list[1]
+        zd = bi_list[0] if bi_list[0]['fx_mark'] == 'd' else bi_list[1]
+        zs = {
+            'ZG': zg,
+            'ZD': zd,
+            'GG': [zg],  # 初始用list储存，记录高低点的变化过程，中枢完成时可能会回退
+            'DD': [zd],  # 根据最高最低点的变化过程可以识别时扩散，收敛，向上还是向下的形态
+            'bi_list': bi_list[:2]
+        }
+        zs_list.append(zs)
+        return False
+
+    # 确定性的笔参与中枢构建
+    last_zs = zs_list[-1]
+    bi = bi_list[-2]
+
+    if bi['date'] == pd.to_datetime('2017-01-26'):
+        print('error')
+
+    if bi['fx_mark'] == 'g':
+        # 三卖 ,滞后，实际出现了一买信号
+        if bi['value'] < last_zs['ZD']['value']:
+            zs_end = last_zs['bi_list'].pop(-1)
+            last_zs.update(
+                zs_end=zs_end,
+                DD=last_zs['DD'].pop(-1) if zs_end['date'] == last_zs['DD'][-1]['date'] else last_zs['DD']
+            )
+
+            zs = {
+                'zs_start': bi_list[-4],
+                'ZG': bi,
+                'ZD': zs_end,
+                'GG': [bi],
+                'DD': [zs_end],
+                'bi_list': [zs_end, bi]
+            }
+            zs_list.append(zs)
+            return True
+        elif bi['value'] < last_zs['ZG']['value']:
+            last_zs.update(ZG=bi)
+        # 有可能成为离开段
+        elif bi['value'] > last_zs['GG'][-1]['value']:
+            last_zs['GG'].append(bi)
+    elif bi['fx_mark'] == 'd':
+        # 三买，滞后，实际出现了一卖信号
+        if bi['value'] > last_zs['ZG']['value']:
+            zs_end = last_zs['bi_list'].pop(-1)
+            last_zs.update(
+                zs_end=zs_end,
+                GG=last_zs['GG'].pop(-1) if zs_end['date'] == last_zs['GG'][-1]['date'] else last_zs['GG']
+            )
+            zs = {
+                'zs_start': bi_list[-4],
+                'ZG': zs_end,
+                'ZD': bi,
+                'GG': [zs_end],
+                'DD': [bi],
+                'bi_list': [zs_end, bi]
+            }
+            zs_list.append(zs)
+            return True
+        elif bi['value'] > last_zs['ZD']['value']:
+            last_zs.update(ZD=bi)
+        # 有可能成为离开段
+        elif bi['value'] < last_zs['DD'][-1]['value']:
+            last_zs['DD'].append(bi)
+    else:
+        raise ValueError
+    last_zs['bi_list'].append(bi)
+
+    return False
+
+
 class CzscBase:
     def __init__(self, code, freq):
         self._bifx_list = []
@@ -94,7 +540,7 @@ class CzscBase:
         assert isinstance(code, str)
         self.code = code.upper()
 
-        self._trade_date = []     # 用来查找索引
+        self._trade_date = []  # 用来查找索引
         self._bars = []
         self._new_bars = []
         self._fx_list = []
@@ -102,446 +548,6 @@ class CzscBase:
         self._xd_list = []
         self._zs_list = []
         self._sig_list = []
-
-    @staticmethod
-    def identify_direction(v1, v2):
-        if v1 > v2:  # 前面几根可能都是包含，这里直接初始赋值down
-            direction = "up"
-        else:
-            direction = "down"
-        return direction
-
-    def update_new_bars(self):
-        assert len(self._bars) > 0
-        bar = self._bars[-1].copy()
-
-        self._trade_date.append(bar['date'])
-        # 第1根K线没有方向,不需要任何处理
-        if len(self._bars) < 2:
-            self._new_bars.append(bar)
-            return False
-
-        last_bar = self._new_bars[-1]
-
-        cur_h, cur_l = bar['high'], bar['low']
-        last_h, last_l, last_dt = last_bar['high'], last_bar['low'], last_bar['date']
-
-        # 处理过包含关系，只需要用一个值识别趋势
-        direction = self.identify_direction(cur_h, last_h)
-
-        # 第2根K线只需要更新方向
-        if len(self._bars) < 3:
-            bar.update(direction=direction)
-            self._new_bars.append(bar)
-            return False
-
-        # 没有包含关系，需要进行分型识别，趋势有可能改变
-        if (cur_h > last_h and cur_l > last_l) or (cur_h < last_h and cur_l < last_l):
-            bar.update(direction=direction)
-            self._new_bars.append(bar)
-            return True
-
-        last_direction = last_bar.get('direction')
-
-        # 有包含关系，不需要进行分型识别，趋势不改变
-        # if (cur_h <= last_h and cur_l >= last_l) or (cur_h >= last_h and cur_l <= last_l):
-        self._new_bars.pop(-1)  # 有包含关系的前一根数据被删除，这里是个技巧,todo 但会导致实际的高低点消失,只能低级别取处理
-        # 有包含关系，按方向分别处理,同时需要更新日期
-        if last_direction == "up":
-            if cur_h < last_h:
-                bar.update(high=last_h, date=last_dt)
-            if cur_l < last_l:
-                bar.update(low=last_l)
-        elif last_direction == "down":
-            if cur_l > last_l:
-                bar.update(low=last_l, date=last_dt)
-            if cur_h > last_h:
-                bar.update(high=last_h)
-        else:
-            logging.error('{} last_direction: {} is wrong'.format(last_dt, last_direction))
-            raise ValueError
-
-        # 和前一根K线方向一致
-        bar.update(direction=last_direction)
-
-        self._new_bars.append(bar)
-        return False
-
-    def update_fx(self):
-        """更新分型序列
-        分型记对象样例：
-         {
-             'date': Timestamp('2020-11-26 00:00:00'),
-              'fx_mark': 'd',
-              'value': 138.0,
-              'fx_start': Timestamp('2020-11-25 00:00:00'),
-              'fx_end': Timestamp('2020-11-27 00:00:00'),
-              'direction': 'up',
-              'fx_power': 'weak'
-          }
-
-         {
-             'date': Timestamp('2020-11-26 00:00:00'),
-              'fx_mark': 'g',
-              'value': 150.67,
-              'fx_start': Timestamp('2020-11-25 00:00:00'),
-              'fx_end': Timestamp('2020-11-27 00:00:00'),
-              'direction': 'down',
-              'fx_power': 'strong'
-          }
-        """
-        # 至少3根k线才能确定分型
-        assert len(self._new_bars) >= 3
-
-        bar1, bar2, bar3 = self._new_bars[-3], self._new_bars[-2], self._new_bars[-1]
-        bar1_mid = (bar1['high'] - bar1['low']) / 2 + bar1['low']
-
-        if bar1['high'] < bar2['high'] > bar3['high']:
-            fx = {
-                "date": bar2['date'],
-                "fx_mark": "g",
-                "value": bar2['high'],
-                "fx_start": bar1['date'],  # 记录分型的开始和结束时间
-                "fx_end": bar3['date'],
-                "direction": bar3['direction'],
-                'fx_power': 'strong' if bar3['close'] < bar1_mid else 'weak'
-            }
-            self._fx_list.append(fx)
-            return True
-
-        elif bar1['low'] > bar2['low'] < bar3['low']:
-            fx = {
-                "date": bar2['date'],
-                "fx_mark": "d",
-                "value": bar2['low'],
-                "fx_start": bar1['date'],
-                "fx_end": bar3['date'],
-                "direction": bar3['direction'],
-                'fx_power': 'strong' if bar3['close'] > bar1_mid else 'weak',
-            }
-            self._fx_list.append(fx)
-            return True
-
-        else:
-            return False
-
-    def update_bi(self):
-        """更新笔序列
-        笔标记对象样例：和分型标记序列结构一样
-         {
-             'date': Timestamp('2020-11-26 00:00:00'),
-             'code': code,
-              'fx_mark': 'd',
-              'value': 138.0,
-              'fx_start': Timestamp('2020-11-25 00:00:00'),
-              'fx_end': Timestamp('2020-11-27 00:00:00'),
-              'direction': 'up'
-          }
-
-         {
-             'date': Timestamp('2020-11-26 00:00:00'),
-             'code': code,
-              'fx_mark': 'g',
-              'value': 150.67,
-              'fx_start': Timestamp('2020-11-25 00:00:00'),
-              'fx_end': Timestamp('2020-11-27 00:00:00'),
-              'direction': 'down'
-          }
-        """
-        # 每根k线都要对bi进行判断
-        if len(self._fx_list) < 2:
-            return False
-
-        bi = self._fx_list[-1].copy()
-
-        # bi不需要考虑转折的分型强度
-        bi.pop('fx_power')
-        bi.update(code=self.code)    # 存储数据库需要
-        # 没有笔时.最开始两个分型作为第一笔，增量更新时从数据库取出两个端点构成的笔时确定的
-        if len(self._bi_list) < 1:
-            bi2 = self._fx_list[-2].copy()
-            bi2.pop('fx_power')
-            bi2.update(code=self.code)
-            self._bi_list = [bi2, bi]
-            return False
-
-        last_bi = self._bi_list[-1]
-
-        bar = self._new_bars[-1].copy()
-        bar.update(value=bar['high'] if bar['direction'] == 'up' else bar['low'])
-
-        trade_date = self._trade_date
-
-        # k 线确认模式
-        if bar['date'] > bi['fx_end']:
-            # 时间确认,函数算了首尾，所以要删除，todo 包含的情况程序走不到这里
-            if 'fx_mark' in last_bi:
-                # 趋势延续替代,首先确认是否延续
-                if (last_bi['fx_mark'] == 'g' and bar['high'] > last_bi['value']) \
-                        or (last_bi['fx_mark'] == 'd' and bar['low'] < last_bi['value']):
-                    self._bi_list[-1] = bar
-                    return False
-
-                kn_inside = trade_date.index(bar['date']) - trade_date.index(last_bi['fx_end']) - 1
-
-                # 必须被和笔方向相同趋势的k线代替，相反方向的会形成分型，由分型处理
-                if kn_inside > 2 and bar['direction'] == last_bi['direction']:  # 两个分型间至少有1根k线，端点有可能不是高低点
-                    self._bi_list.append(bar)
-                    return True
-
-                # 只有一个端点，没有价格确认
-                if len(self._bi_list) < 2:
-                    return False
-
-                # 价格确认
-                if (last_bi['fx_mark'] == 'd' and bar['high'] > self._bi_list[-2]['value']) \
-                        or (last_bi['fx_mark'] == 'g' and bar['low'] < self._bi_list[-2]['value']):
-                    self._bi_list.append(bar)
-                    return True
-
-            else:  # 原有未出现分型笔的延续，todo,只能替代原趋势，需要增加assert
-                assert bar['direction'] == last_bi['direction']
-                self._bi_list[-1] = bar
-                return False
-
-        # 非分型结尾笔，直接替换成分型, 没有新增笔，后续不需要处理，同一个端点确认
-        if 'fx_mark' not in last_bi or bi['date'] == last_bi['date']:
-            self._bi_list[-1] = bi
-            return False
-
-        # 分型处理，连续高低点处理，只判断是否后移,没有增加笔，不需要处理
-        if last_bi['fx_mark'] == bi['fx_mark']:
-            if (last_bi['fx_mark'] == 'g' and last_bi['value'] < bi['value']) \
-                    or (last_bi['fx_mark'] == 'd' and last_bi['value'] > bi['value']):
-                self._bi_list[-1] = bi
-                return False
-        else:  # 笔确认是条件1、时间破坏，两个不同分型间至少有一根K线，2、价格破坏，向下的一笔破坏了上一笔的低点
-            # 时间确认,函数算了首尾，所以要删除
-            kn_inside = trade_date.index(bi['fx_start']) - trade_date.index(last_bi['fx_end']) - 1
-
-            if kn_inside > 0:  # 两个分型间至少有1根k线，端点有可能不是高低点
-                index = -2
-                while self._fx_list[index]['date'] > last_bi['date']:
-
-                    # if bi['fx_mark'] == self._fx_list[index]['fx_mark']:
-                    #     if bi['fx_mark'] == 'd' and bi['value'] > self._fx_list[index]['value']:
-
-                    if (bi['fx_mark'] == 'd' and 'd' == self._fx_list[index]['fx_mark']
-                            and bi['value'] > self._fx_list[index]['value']) \
-                        or (bi['fx_mark'] == 'g' and 'g' == self._fx_list[index]['fx_mark']
-                            and bi['value'] < self._fx_list[index]['value']):
-                        bi = self._fx_list[index].copy()
-
-                    # if (bi['fx_mark'] == 'd' and 'd' == self._fx_list[index]['fx_mark']
-                    #         and bi['value'] > self._fx_list[index]['value']) \
-                    #     or (bi['fx_mark'] == 'g' and 'g' == self._fx_list[index]['fx_mark']
-                    #         and bi['value'] < self._fx_list[index]['value']):
-                    #     bi = self._fx_list[index].copy()
-                    #     print('try')
-
-                    index = index - 1
-                if 'fx_power' in bi:
-                    bi.pop('fx_power')
-                    bi.update(code=self.code)  # 存储数据库需要
-
-                self._bi_list.append(bi)
-                return True
-
-            # 只有一个端点，没有价格确认
-            if len(self._bi_list) < 2:
-                return False
-
-            # 价格确认
-            if (bi['fx_mark'] == 'g' and bi['value'] > self._bi_list[-2]['value']) \
-                    or (bi['fx_mark'] == 'd' and bi['value'] < self._bi_list[-2]['value']):
-                self._bi_list.append(bi)
-                return True
-
-    def update_xd(self):
-        """更新笔分型序列
-        分型记对象样例：
-         {
-             'date': Timestamp('2020-11-26 00:00:00'),
-              'fx_mark': 'd',
-              'value': 138.0,
-              'fx_start': Timestamp('2020-11-25 00:00:00'),
-              'fx_end': Timestamp('2020-11-27 00:00:00'),
-              'direction': 'up',
-              'fx_power': 'weak'
-          }
-
-         {
-             'date': Timestamp('2020-11-26 00:00:00'),
-              'fx_mark': 'g',
-              'value': 150.67,
-              'fx_start': Timestamp('2020-11-25 00:00:00'),
-              'fx_end': Timestamp('2020-11-27 00:00:00'),
-              'direction': 'down',
-              'fx_power': 'strong'
-          }
-        """
-        # 至少3根同类型分型才可能出现线段，最后1根bi不确定，因此最后一段也不确定
-        if len(self._bi_list) < 5:
-            return False
-
-        if len(self._xd_list) < 1:
-            # 线段不存在，初始化线段，找4个点的最高和最低点组成线段
-            bi_list = self._bi_list[:-1].copy()
-            bi_list = sorted(bi_list, key=lambda x: x['value'], reverse=False)
-            xd_list = [bi_list[0], bi_list[-1]]
-            xd_list = sorted(xd_list, key=lambda x: x['date'], reverse=False)
-            self._xd_list = xd_list
-            return True
-
-        bi4 = self._bi_list[-4]
-        xd = self._bi_list[-2]
-        last_xd = self._xd_list[-1]
-        xd2 = self._xd_list[-2]
-
-        # todo 只用assert?
-        if xd['date'] <= last_xd['date'] or 'fx_mark' not in xd:
-            # print('last {} and now {}'.format(last_xd['date'], xd['date']))
-            return False
-
-        if xd['fx_mark'] == 'g':
-            # 同向延续
-            if last_xd['fx_mark'] == 'g' and xd['value'] > last_xd['value']:
-                self._xd_list[-1] = xd
-                return False
-            # 反向判断
-            elif last_xd['fx_mark'] == 'd':
-                # 价格判断
-                if xd['value'] > xd2['value']:
-                    self._xd_list.append(xd)
-                    return True
-                # 出现三笔破坏线段，连续两笔，一笔比一笔高,寻找段之间的最高点
-                elif bi4['date'] > last_xd['date'] and xd['value'] > bi4['value']:
-                    index = -6
-                    bi = self._bi_list[index]
-                    # 前一个高点没有碰到段前面一个低点
-                    if bi['date'] < last_xd['date'] and self._bi_list[index-1]['value'] > bi4['value']:
-                        return False
-
-                    while bi['date'] > last_xd['date']:
-                        if xd['value'] < bi['value']:
-                            xd = bi
-                        index = index - 2
-                        bi = self._bi_list[index]
-                    self._xd_list.append(xd)
-                    return True
-        elif xd['fx_mark'] == 'd':
-            # 同向延续
-            if last_xd['fx_mark'] == 'd' and xd['value'] < last_xd['value']:
-                self._xd_list[-1] = xd
-                return False
-            # 反向判断
-            elif last_xd['fx_mark'] == 'g':
-                # 价格判断
-                if xd['value'] < xd2['value']:
-                    self._xd_list.append(xd)
-                    return True
-                # 出现三笔破坏线段，连续两笔，一笔比一笔低,将最低的一笔作为段的起点，避免出现最低点不是端点的问题
-                elif bi4['date'] > last_xd['date'] and xd['value'] < bi4['value']:
-                    index = -6
-                    bi = self._bi_list[index]
-                    # 前一个低点没有碰到段前面一高低点
-                    if bi['date'] < last_xd['date'] and self._bi_list[index - 1]['value'] < bi4['value']:
-                        return False
-
-                    while bi['date'] > last_xd['date']:
-                        if xd['value'] > bi['value']:
-                            xd = bi
-                        index = index-2
-                        bi = self._bi_list[index]
-                    self._xd_list.append(xd)
-                    return True
-        return False
-
-    def update_zs(self):
-        """
-        {
-              'zs_start': 进入段的起点
-              'zs_end':  离开段的终点
-              'ZG': 中枢高点,
-              'ZD': 中枢低点,
-              'GG': 中枢最低点,
-              'DD': 中枢最高点，
-              'bi_list': list[dict]   与中枢方向相反的特征笔序列
-          }
-        """
-        if len(self._zs_list) < 1:
-            assert len(self._bi_list) < 4
-            zg = self._bi_list[0] if self._bi_list[0]['fx_mark'] == 'g' else self._bi_list[1]
-            zd = self._bi_list[0] if self._bi_list[0]['fx_mark'] == 'd' else self._bi_list[1]
-            zs = {
-                'ZG': zg,
-                'ZD': zd,
-                'GG': [zg],  # 初始用list储存，记录高低点的变化过程，中枢完成时可能会回退
-                'DD': [zd],  # 根据最高最低点的变化过程可以识别时扩散，收敛，向上还是向下的形态
-                'bi_list': self._bi_list[:2]
-            }
-            self._zs_list.append(zs)
-            return False
-
-        # 确定性的笔参与中枢构建
-        last_zs = self._zs_list[-1]
-        bi = self._bi_list[-2]
-
-        if bi['date'] == pd.to_datetime('2017-01-26'):
-            print('error')
-
-        if bi['fx_mark'] == 'g':
-            # 三卖 ,滞后，实际出现了一买信号
-            if bi['value'] < last_zs['ZD']['value']:
-                zs_end = last_zs['bi_list'].pop(-1)
-                last_zs.update(
-                    zs_end=zs_end,
-                    DD=last_zs['DD'].pop(-1) if zs_end['date'] == last_zs['DD'][-1]['date'] else last_zs['DD']
-                )
-
-                zs = {
-                    'zs_start': self._bi_list[-4],
-                    'ZG': bi,
-                    'ZD': zs_end,
-                    'GG': [bi],
-                    'DD': [zs_end],
-                    'bi_list': [zs_end, bi]
-                }
-                self._zs_list.append(zs)
-                return True
-            elif bi['value'] < last_zs['ZG']['value']:
-                last_zs.update(ZG=bi)
-            # 有可能成为离开段
-            elif bi['value'] > last_zs['GG'][-1]['value']:
-                last_zs['GG'].append(bi)
-        elif bi['fx_mark'] == 'd':
-            # 三买，滞后，实际出现了一卖信号
-            if bi['value'] > last_zs['ZG']['value']:
-                zs_end = last_zs['bi_list'].pop(-1)
-                last_zs.update(
-                    zs_end=zs_end,
-                    GG=last_zs['GG'].pop(-1) if zs_end['date'] == last_zs['GG'][-1]['date'] else last_zs['GG']
-                )
-                zs = {
-                    'zs_start': self._bi_list[-4],
-                    'ZG': zs_end,
-                    'ZD': bi,
-                    'GG': [zs_end],
-                    'DD': [bi],
-                    'bi_list': [zs_end, bi]
-                }
-                self._zs_list.append(zs)
-                return True
-            elif bi['value'] > last_zs['ZD']['value']:
-                last_zs.update(ZD=bi)
-            # 有可能成为离开段
-            elif bi['value'] < last_zs['DD'][-1]['value']:
-                last_zs['DD'].append(bi)
-        else:
-            raise ValueError
-        last_zs['bi_list'].append(bi)
-
-        return False
 
     def update_sig(self):
         """
@@ -600,22 +606,24 @@ class CzscBase:
 
         return False
 
-    def update(self, bar):
+    def update(self):
         # 有包含关系时，不可能有分型出现，不出现分型时才需要
-        if not self.update_new_bars():
+        if not update_new_bars(bars=self._bars, new_bars=self._new_bars, trade_date=self._trade_date):
             return
 
-        self.update_fx()
+        update_fx(new_bars=self._new_bars, fx_list=self._fx_list)
 
         # 至少两个分型才能形成笔
         # todo 即使没有分型，bar 来了后也可以通过时间个价格来确认分型，不是必须等到分型出现，最后一笔用当前bar的最低或者最高点代替
-        if not self.update_bi():
+        if not update_bi(
+                new_bars=self._new_bars, fx_list=self._fx_list, bi_list=self._bi_list, trade_date=self._trade_date
+        ):
             return
 
         # 新增确定性的笔才处理段
-        self.update_xd()
+        update_xd(bi_list=self._bi_list, xd_list=self._xd_list)
 
-        if not self.update_zs():
+        if update_zs(bi_list=self._bi_list, zs_list=self._zs_list):
             return
 
     #  必须实现,每次输入一个行情数据，然后调用update看是否需要更新
@@ -648,7 +656,7 @@ class CzscMongo(CzscBase):
         chart = kline_pro(
             kline=self._bars, fx=self._fx_list, bi=self._bi_list,
             zs=self._zs_list, bs=self._sig_list, xd=self._xd_list,
-            title=self.code, width='2500px', height='850px'
+            title=self.code, width='1850px', height='580px'
         )
 
         if not chart_path:
@@ -667,7 +675,7 @@ class CzscMongo(CzscBase):
         # bar['date'] = pd.to_datetime(bar['date'])
         self._bars.append(bar)
 
-        self.update(bar)
+        self.update()
 
     def run(self, start=None, end=None):
 
@@ -1040,7 +1048,7 @@ def main_consumer():
 
 
 def main_mongo():
-    czsc_mongo = CzscMongo(code='600048', freq='day', exchange='sse')
+    czsc_mongo = CzscMongo(code='06886', freq='day', exchange='sse')
     czsc_mongo.run()
     czsc_mongo.draw()
 
