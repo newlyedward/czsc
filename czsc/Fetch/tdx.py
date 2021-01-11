@@ -90,6 +90,9 @@ def _get_sh_sz_list():
         '12': 'bond',
         '13': 'bond',
         '14': 'bond',
+        '15': 'bond',
+        '16': 'bond',
+        '17': 'bond',
         '75': 'bond',
     }
 
