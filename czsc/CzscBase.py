@@ -35,7 +35,7 @@ from czsc.ClPubSub.producer import Publisher
 from czsc.Fetch.mongo import FACTOR_DATABASE, fetch_future_bi_day
 from czsc.Fetch.tdx import get_bar
 from czsc.ClEngine.ClThread import ClThread
-from czsc.Utils import kline_pro, util_log_info
+from czsc.Utils import kline_pro, util_log_info, SingleLinkList
 from czsc.Utils.trade_date import util_get_next_day, util_get_trade_gap
 
 
@@ -232,6 +232,8 @@ def update_bi(new_bars: list, fx_list: list, bi_list: list, trade_date: list):
           'fx_end': Timestamp('2020-11-27 00:00:00'),
           'direction': 'down'
       }
+
+      return: True 新增笔，前一笔确定，需要继续进行升级处理
     """
     # 每根k线都要对bi进行判断
     if len(fx_list) < 2:
@@ -342,7 +344,31 @@ def update_bi(new_bars: list, fx_list: list, bi_list: list, trade_date: list):
             return True
 
 
-def update_xd(bi_list: list, xd_list: list):
+class XdList(object):
+    """存放线段"""
+
+    def __init__(self, xd_list=[]):
+        # item存放数据元素
+        self.xd_list = xd_list
+        # next是低一级别的线段
+        self.next = None
+        # prev 指向高一级别的线段
+        self.prev = None
+
+    def __len__(self):
+        return len(self.xd_list)
+
+    def __getitem__(self, item):
+        return self.xd_list[item]
+
+    def __setitem__(self, key, value):
+        self.xd_list[key] = value
+
+    def append(self, value):
+        self.xd_list.append(value)
+
+
+def update_xd(bi_list: list, xd_list: XdList):
     """更新笔分型序列
     分型记对象样例：
      {
@@ -545,7 +571,7 @@ class CzscBase:
         self._new_bars = []
         self._fx_list = []
         self._bi_list = []
-        self._xd_list = []
+        self._xd_list = XdList()
         self._zs_list = []
         self._sig_list = []
 
@@ -656,7 +682,7 @@ class CzscMongo(CzscBase):
         chart = kline_pro(
             kline=self._bars, fx=self._fx_list, bi=self._bi_list,
             zs=self._zs_list, bs=self._sig_list, xd=self._xd_list,
-            title=self.code, width='1850px', height='580px'
+            title=self.code, width='1440px', height='580px'
         )
 
         if not chart_path:
