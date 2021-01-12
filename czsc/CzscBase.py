@@ -437,7 +437,7 @@ def update_xd(bi_list: list, xd_list: XdList):
                     if bi['date'] < last_xd['date'] and bi_list[index - 1]['value'] > bi4['value']:
                         return False
                 except Exception as err:
-                    util_log_info('Last xd {}:{}'.fromat(last_xd['date'], err))
+                    util_log_info('Last xd {}:{}'.format(last_xd['date'], err))
 
                 while bi['date'] > last_xd['date']:
                     if xd['value'] < bi['value']:
@@ -1094,7 +1094,7 @@ def main_consumer():
 
 
 def main_mongo():
-    czsc_mongo = CzscMongo(code='rbl8', freq='day', exchange='czce')
+    czsc_mongo = CzscMongo(code='600519', freq='day', exchange='czce')
     czsc_mongo.run()
     czsc_mongo.draw()
 
