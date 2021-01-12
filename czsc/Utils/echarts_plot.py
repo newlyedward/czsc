@@ -107,7 +107,7 @@ def kline_pro(kline: List[dict],
 
     axis_pointer_opts = opts.AxisPointerOpts(is_show=True, link=[{"xAxisIndex": "all"}])
 
-    range_start = int(100-216 / len(kline) * 100)
+    range_start = int(100 - 216 / len(kline) * 100)
     dz_inside = opts.DataZoomOpts(False, "inside", xaxis_index=[0, 1, 2], range_start=range_start, range_end=100)
     dz_slider = opts.DataZoomOpts(True, "slider", xaxis_index=[0, 1, 2], pos_top="96%",
                                   pos_bottom="0%", range_start=range_start, range_end=100)
@@ -246,20 +246,27 @@ def kline_pro(kline: List[dict],
         chart_k = chart_k.overlap(chart_bi)
 
     if xd:
-        # xd_dts = [x.get('dt', x['date']) for x in xd]
-        try:
+        xd_colors = ["white", '#f034c1', "#7944b7", "#468b58", "#c17f2f", "#9EA0A1"]
+        index = 0
+        while xd:
             xd_dts = [x['date'] for x in xd]
-        except:
-            xd_dts = [x['dt'] for x in xd]
-        xd_val = [x['value'] for x in xd]
-        chart_xd = Line()
-        chart_xd.add_xaxis(xd_dts)
-        chart_xd.add_yaxis(series_name="XD", y_axis=xd_val, is_selected=True, symbol="triangle", symbol_size=10,
-                           linestyle_opts=opts.LineStyleOpts(color="white", width=2, type_="solid"),
-                           itemstyle_opts=opts.ItemStyleOpts(color="rgba(37, 141, 54, 1.0)", ))
+            xd_val = [x['value'] for x in xd]
 
-        chart_xd.set_global_opts(xaxis_opts=grid0_xaxis_opts, legend_opts=legend_not_show_opts)
-        chart_k = chart_k.overlap(chart_xd)
+            chart_xd = Line()
+            chart_xd.add_xaxis(xd_dts)
+
+            xd_color = xd_colors[index % len(xd_colors)]
+            chart_xd.add_yaxis(series_name="XD{}".format(index), y_axis=xd_val, is_selected=True, symbol="triangle", symbol_size=10,
+                               linestyle_opts=opts.LineStyleOpts(
+                                   color=xd_color, width=index + 2, type_="solid"
+                               ),
+                               itemstyle_opts=opts.ItemStyleOpts(color=xd_color)
+                               )
+
+            chart_xd.set_global_opts(xaxis_opts=grid0_xaxis_opts, legend_opts=legend_not_show_opts)
+            chart_k = chart_k.overlap(chart_xd)
+            xd = xd.next
+            index = index + 1
 
     if bs:
         b_dts = [x['date'] for x in bs if x['bs'] == 'buy']
