@@ -35,7 +35,7 @@ from czsc.ClPubSub.producer import Publisher
 from czsc.Fetch.mongo import FACTOR_DATABASE, fetch_future_bi_day
 from czsc.Fetch.tdx import get_bar
 from czsc.ClEngine.ClThread import ClThread
-from czsc.Utils import kline_pro, util_log_info, SingleLinkList
+from czsc.Utils import kline_pro, util_log_info
 from czsc.Utils.trade_date import util_get_next_day, util_get_trade_gap
 
 
@@ -349,7 +349,7 @@ class XdList(object):
 
     def __init__(self, xd_list=[]):
         # item存放数据元素
-        self.xd_list = xd_list
+        self.xd_list = xd_list.copy()   # 否则指向同一个地址
         # next是低一级别的线段
         self.next = None
         # prev 指向高一级别的线段
@@ -433,8 +433,11 @@ def update_xd(bi_list: list, xd_list: XdList):
                 index = -6
                 bi = bi_list[index]
                 # 前一个高点没有碰到段前面一个低点
-                if bi['date'] < last_xd['date'] and bi_list[index - 1]['value'] > bi4['value']:
-                    return False
+                try:
+                    if bi['date'] < last_xd['date'] and bi_list[index - 1]['value'] > bi4['value']:
+                        return False
+                except Exception as err:
+                    util_log_info('Last xd {}:{}'.fromat(last_xd['date'], err))
 
                 while bi['date'] > last_xd['date']:
                     if xd['value'] < bi['value']:
@@ -459,8 +462,11 @@ def update_xd(bi_list: list, xd_list: XdList):
                 index = -6
                 bi = bi_list[index]
                 # 前一个低点没有碰到段前面一高低点
-                if bi['date'] < last_xd['date'] and bi_list[index - 1]['value'] < bi4['value']:
-                    return False
+                try:
+                    if bi['date'] < last_xd['date'] and bi_list[index - 1]['value'] < bi4['value']:
+                        return False
+                except Exception as err:
+                    util_log_info('Last xd {}:{}'.fromat(last_xd['date'], err))
 
                 while bi['date'] > last_xd['date']:
                     if xd['value'] > bi['value']:
@@ -647,7 +653,21 @@ class CzscBase:
             return
 
         # 新增确定性的笔才处理段
-        update_xd(bi_list=self._bi_list, xd_list=self._xd_list)
+        bi_list = self._bi_list
+        xd_list = self._xd_list
+        result = True
+        while result:
+            result = update_xd(bi_list=bi_list, xd_list=xd_list)
+
+            if result:
+                if xd_list.next is None:
+                    bi_list = xd_list
+                    xd_list.next = XdList()
+                    xd_list = xd_list.next
+                    xd_list.prev = bi_list
+                else:
+                    bi_list = xd_list
+                    xd_list = xd_list.next
 
         if update_zs(bi_list=self._bi_list, zs_list=self._zs_list):
             return
@@ -1074,7 +1094,7 @@ def main_consumer():
 
 
 def main_mongo():
-    czsc_mongo = CzscMongo(code='06886', freq='day', exchange='sse')
+    czsc_mongo = CzscMongo(code='rbl8', freq='day', exchange='czce')
     czsc_mongo.run()
     czsc_mongo.draw()
 
