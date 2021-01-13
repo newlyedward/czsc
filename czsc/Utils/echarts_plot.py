@@ -12,6 +12,9 @@ import numpy as np
 from .ta import SMA, MACD
 
 
+# from czsc.CzscBase import XdList
+
+
 def heat_map(data: List[dict],
              x_label: List[str] = None,
              y_label: List[str] = None,
@@ -62,8 +65,9 @@ def heat_map(data: List[dict],
 def kline_pro(kline: List[dict],
               fx: List[dict] = None,
               bi: List[dict] = None,
-              xd: List[dict] = None,
-              zs: List[dict] = None,
+              xd=None,
+              # xd: XdList = None,
+              # zs: List[dict] = None,
               bs: List[dict] = None,
               title: str = "缠中说禅K线分析",
               width: str = "1400px",
@@ -188,9 +192,9 @@ def kline_pro(kline: List[dict],
         xaxis_opts=grid0_xaxis_opts
     )
 
-    if zs:
+    if xd:
         data = [[{"xAxis": x['bi_list'][0]['date'], "yAxis": x['ZG']['value']},
-                 {"xAxis": x['bi_list'][-1]['date'], "yAxis": x['ZD']['value']}] for x in zs]
+                 {"xAxis": x['bi_list'][-1]['date'], "yAxis": x['ZD']['value']}] for x in xd.zs_list]
         chart_k.set_series_opts(
             markarea_opts=opts.MarkAreaOpts(is_silent=True, data=data)
         )
@@ -256,7 +260,8 @@ def kline_pro(kline: List[dict],
             chart_xd.add_xaxis(xd_dts)
 
             xd_color = xd_colors[index % len(xd_colors)]
-            chart_xd.add_yaxis(series_name="XD{}".format(index), y_axis=xd_val, is_selected=True, symbol="triangle", symbol_size=10,
+            chart_xd.add_yaxis(series_name="XD{}".format(index), y_axis=xd_val, is_selected=True, symbol="triangle",
+                               symbol_size=10,
                                linestyle_opts=opts.LineStyleOpts(
                                    color=xd_color, width=index + 2, type_="solid"
                                ),

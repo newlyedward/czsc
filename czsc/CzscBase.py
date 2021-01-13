@@ -35,7 +35,8 @@ from czsc.ClPubSub.producer import Publisher
 from czsc.Fetch.mongo import FACTOR_DATABASE, fetch_future_bi_day
 from czsc.Fetch.tdx import get_bar
 from czsc.ClEngine.ClThread import ClThread
-from czsc.Utils import kline_pro, util_log_info
+from czsc.Utils.echarts_plot import kline_pro
+from czsc.Utils.logs import util_log_info
 from czsc.Utils.trade_date import util_get_next_day, util_get_trade_gap
 
 
@@ -347,9 +348,11 @@ def update_bi(new_bars: list, fx_list: list, bi_list: list, trade_date: list):
 class XdList(object):
     """存放线段"""
 
-    def __init__(self, xd_list=[]):
+    def __init__(self, xd_list=[], zs_list=[]):
         # item存放数据元素
         self.xd_list = xd_list.copy()   # 否则指向同一个地址
+        # 低级别的中枢
+        self.zs_list = zs_list.copy()
         # next是低一级别的线段
         self.next = None
         # prev 指向高一级别的线段
@@ -432,9 +435,11 @@ def update_xd(bi_list: list, xd_list: XdList):
             elif bi4['date'] > last_xd['date'] and xd['value'] > bi4['value']:
                 index = -6
                 bi = bi_list[index]
-                # 前一个高点没有碰到段前面一个低点
+                # 连续两个高点没有碰到段前面一个低点
                 try:
-                    if bi['date'] < last_xd['date'] and bi_list[index - 1]['value'] > bi4['value']:
+                    if bi['date'] < last_xd['date'] and \
+                            bi_list[index - 1]['value'] > bi4['value'] and \
+                            bi_list[index]['value'] > xd['value']:
                         return False
                 except Exception as err:
                     util_log_info('Last xd {}:{}'.format(last_xd['date'], err))
@@ -461,9 +466,11 @@ def update_xd(bi_list: list, xd_list: XdList):
             elif bi4['date'] > last_xd['date'] and xd['value'] < bi4['value']:
                 index = -6
                 bi = bi_list[index]
-                # 前一个低点没有碰到段前面一高低点
+                # 连续两个个低点没有碰到段前面一高低点
                 try:
-                    if bi['date'] < last_xd['date'] and bi_list[index - 1]['value'] < bi4['value']:
+                    if bi['date'] < last_xd['date'] and \
+                            bi_list[index - 1]['value'] < bi4['value'] and \
+                            bi_list[index]['value'] < xd['value']:
                         return False
                 except Exception as err:
                     util_log_info('Last xd {}:{}'.fromat(last_xd['date'], err))
@@ -507,9 +514,6 @@ def update_zs(bi_list: list, zs_list: list):
     # 确定性的笔参与中枢构建
     last_zs = zs_list[-1]
     bi = bi_list[-2]
-
-    if bi['date'] == pd.to_datetime('2017-01-26'):
-        print('error')
 
     if bi['fx_mark'] == 'g':
         # 三卖 ,滞后，实际出现了一买信号
@@ -578,18 +582,18 @@ class CzscBase:
         self._fx_list = []
         self._bi_list = []
         self._xd_list = XdList()
-        self._zs_list = []
+        # self._zs_list = []
         self._sig_list = []
 
     def update_sig(self):
         """
         缠论买卖信号，一二三买卖
         """
-        if len(self._zs_list) < 1:
+        if len(self._xd_list.zs_list) < 1:
             return False
 
         # 不确定性的笔来给出买卖信号
-        zs = self._zs_list[-1]
+        zs = self._xd_list.zs_list[-1]
         bi = self._bi_list[-1]
         bar = self._bars[-1]
         last_new_bar = self._new_bars[-2]
@@ -655,22 +659,27 @@ class CzscBase:
         # 新增确定性的笔才处理段
         bi_list = self._bi_list
         xd_list = self._xd_list
+        zs_list = xd_list.zs_list
         result = True
         while result:
             result = update_xd(bi_list=bi_list, xd_list=xd_list)
+            update_zs(bi_list=bi_list, zs_list=zs_list)
 
             if result:
+
                 if xd_list.next is None:
                     bi_list = xd_list
                     xd_list.next = XdList()
                     xd_list = xd_list.next
                     xd_list.prev = bi_list
+                    zs_list = xd_list.zs_list
                 else:
                     bi_list = xd_list
                     xd_list = xd_list.next
+                    zs_list = xd_list.zs_list
 
-        if update_zs(bi_list=self._bi_list, zs_list=self._zs_list):
-            return
+        # if update_zs(bi_list=self._bi_list, zs_list=self._zs_list):
+        #     return
 
     #  必须实现,每次输入一个行情数据，然后调用update看是否需要更新
     def on_bar(self, bar):
@@ -696,12 +705,12 @@ class CzscMongo(CzscBase):
         else:
             start = '1990-01-01'
 
-        self.data = get_bar(code, start, freq=freq, exchange=exchange)
+        self.data = get_bar(code, start, end='2014-12-28', freq=freq, exchange=exchange)
 
     def draw(self, chart_path=None):
         chart = kline_pro(
             kline=self._bars, fx=self._fx_list, bi=self._bi_list,
-            zs=self._zs_list, bs=self._sig_list, xd=self._xd_list,
+            bs=self._sig_list, xd=self._xd_list,
             title=self.code, width='1440px', height='580px'
         )
 
@@ -1094,7 +1103,7 @@ def main_consumer():
 
 
 def main_mongo():
-    czsc_mongo = CzscMongo(code='600519', freq='day', exchange='czce')
+    czsc_mongo = CzscMongo(code='600036', freq='day', exchange='czce')
     czsc_mongo.run()
     czsc_mongo.draw()
 
