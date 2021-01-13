@@ -193,8 +193,27 @@ def kline_pro(kline: List[dict],
     )
 
     if xd:
-        data = [[{"xAxis": x['bi_list'][0]['date'], "yAxis": x['ZG']['value']},
-                 {"xAxis": x['bi_list'][-1]['date'], "yAxis": x['ZD']['value']}] for x in xd.zs_list]
+        index = 0
+        zs_colors = ["yellow", "white", '#f034c1', "#7944b7", "#468b58", "#c17f2f", "#9EA0A1"]
+        data = []
+        temp_xd = xd
+        while temp_xd:
+            data = data + [opts.MarkAreaItem(
+                name='XD{}'.format(index),
+                x=(x['bi_list'][0]['date'], x['bi_list'][-1]['date']),
+                y=(x['ZG']['value'], x['ZD']['value']),
+                itemstyle_opts=opts.ItemStyleOpts(
+                    color=zs_colors[index],
+                    # border_color=zs_colors[index],
+                    # border_width=1+index,
+                    # border_type='dashed',
+                    opacity=0.2,
+                    # area_color=zs_colors[index]
+                )) for x in temp_xd.zs_list]
+            temp_xd = temp_xd.next
+            index = index + 1
+        # data = [[{"xAxis": x['bi_list'][0]['date'], "yAxis": x['ZG']['value']},
+        #          {"xAxis": x['bi_list'][-1]['date'], "yAxis": x['ZD']['value']}] for x in xd.zs_list]
         chart_k.set_series_opts(
             markarea_opts=opts.MarkAreaOpts(is_silent=True, data=data)
         )
@@ -250,8 +269,8 @@ def kline_pro(kline: List[dict],
         chart_k = chart_k.overlap(chart_bi)
 
     if xd:
-        xd_colors = ["white", '#f034c1', "#7944b7", "#468b58", "#c17f2f", "#9EA0A1"]
         index = 0
+        xd_colors = zs_colors[1:]
         while xd:
             xd_dts = [x['date'] for x in xd]
             xd_val = [x['value'] for x in xd]
