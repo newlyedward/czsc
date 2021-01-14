@@ -89,10 +89,10 @@ class ClSimBar(ClThread):
 
 
 def identify_direction(v1, v2):
-    if v1 > v2:  # 前面几根可能都是包含，这里直接初始赋值down
-        direction = "up"
+    if v1 > v2:  # 前面几根可能都是包含，这里直接初始赋值-1
+        direction = 1
     else:
-        direction = "down"
+        direction = -1
     return direction
 
 
@@ -132,12 +132,12 @@ def update_new_bars(bars, new_bars: list, trade_date: list):
     # if (cur_h <= last_h and cur_l >= last_l) or (cur_h >= last_h and cur_l <= last_l):
     new_bars.pop(-1)  # 有包含关系的前一根数据被删除，这里是个技巧,todo 但会导致实际的高低点消失,只能低级别取处理
     # 有包含关系，按方向分别处理,同时需要更新日期
-    if last_direction == "up":
+    if last_direction == 1:
         if cur_h < last_h:
             bar.update(high=last_h, date=last_dt)
         if cur_l < last_l:
             bar.update(low=last_l)
-    elif last_direction == "down":
+    elif last_direction == -1:
         if cur_l > last_l:
             bar.update(low=last_l, date=last_dt)
         if cur_h > last_h:
@@ -162,7 +162,7 @@ def update_fx(new_bars: list, fx_list: list):
           'value': 138.0,
           'fx_start': Timestamp('2020-11-25 00:00:00'),
           'fx_end': Timestamp('2020-11-27 00:00:00'),
-          'direction': 'up',
+          'direction': 1,
           'fx_power': 'weak'
       }
 
@@ -172,7 +172,7 @@ def update_fx(new_bars: list, fx_list: list):
           'value': 150.67,
           'fx_start': Timestamp('2020-11-25 00:00:00'),
           'fx_end': Timestamp('2020-11-27 00:00:00'),
-          'direction': 'down',
+          'direction': -1,
           'fx_power': 'strong'
       }
     """
@@ -221,7 +221,7 @@ def update_bi(new_bars: list, fx_list: list, bi_list: list, trade_date: list):
           'value': 138.0,
           'fx_start': Timestamp('2020-11-25 00:00:00'),
           'fx_end': Timestamp('2020-11-27 00:00:00'),
-          'direction': 'up'
+          'direction': 1
       }
 
      {
@@ -231,7 +231,7 @@ def update_bi(new_bars: list, fx_list: list, bi_list: list, trade_date: list):
           'value': 150.67,
           'fx_start': Timestamp('2020-11-25 00:00:00'),
           'fx_end': Timestamp('2020-11-27 00:00:00'),
-          'direction': 'down'
+          'direction': -1
       }
 
       return: True 新增笔，前一笔确定，需要继续进行升级处理
@@ -257,7 +257,7 @@ def update_bi(new_bars: list, fx_list: list, bi_list: list, trade_date: list):
     last_bi = bi_list[-1]
 
     bar = new_bars[-1].copy()
-    bar.update(value=bar['high'] if bar['direction'] == 'up' else bar['low'])
+    bar.update(value=bar['high'] if bar['direction'] == 1 else bar['low'])
 
     # k 线确认模式
     if bar['date'] > bi['fx_end']:
@@ -494,7 +494,7 @@ def update_zs(bi_list: list, zs_list: list):
           'ZD': 中枢低点,
           'GG': 中枢最低点,
           'DD': 中枢最高点，
-          'bi_list': list[dict]   与中枢方向相反的特征笔序列
+          'bi_list': list[dict]
       }
     """
     if len(zs_list) < 1:
@@ -506,7 +506,8 @@ def update_zs(bi_list: list, zs_list: list):
             'ZD': zd,
             'GG': [zg],  # 初始用list储存，记录高低点的变化过程，中枢完成时可能会回退
             'DD': [zd],  # 根据最高最低点的变化过程可以识别时扩散，收敛，向上还是向下的形态
-            'bi_list': bi_list[:2]
+            'bi_list': bi_list[:2],
+            # 'location': 0     # 初始状态为0，说明没有方向， -1 表明下降第1割中枢， +2 表明上升第2个中枢
         }
         zs_list.append(zs)
         return False
@@ -705,7 +706,8 @@ class CzscMongo(CzscBase):
         else:
             start = '1990-01-01'
 
-        self.data = get_bar(code, start, end='2014-12-28', freq=freq, exchange=exchange)
+        # self.data = get_bar(code, start, freq=freq, exchange=exchange)
+        self.data = get_bar(code, start, end='2016-9-28', freq=freq, exchange=exchange)
 
     def draw(self, chart_path=None):
         chart = kline_pro(
@@ -1103,7 +1105,7 @@ def main_consumer():
 
 
 def main_mongo():
-    czsc_mongo = CzscMongo(code='600036', freq='day', exchange='czce')
+    czsc_mongo = CzscMongo(code='ml8', freq='day', exchange='dce')
     czsc_mongo.run()
     czsc_mongo.draw()
 
