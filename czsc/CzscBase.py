@@ -27,6 +27,7 @@ import webbrowser
 
 import datetime
 import pandas as pd
+import numpy as np
 import pymongo
 
 from czsc.ClPubSub.consumer import Subscriber
@@ -96,7 +97,26 @@ def identify_direction(v1, v2):
     return direction
 
 
-def update_new_bars(bars, new_bars: list, trade_date: list):
+def update_fx(bars, new_bars: list, fx_list: list, trade_date: list):
+    """更新分型序列
+        分型记对象样例：
+         {
+             'date': Timestamp('2020-11-26 00:00:00'),
+              'fx_mark': 'd',
+              'value': 138.0,
+              'fx_start': Timestamp('2020-11-25 00:00:00'),
+              'fx_end': Timestamp('2020-11-27 00:00:00'),
+              'direction': 1,
+          }
+         {
+             'date': Timestamp('2020-11-26 00:00:00'),
+              'fx_mark': 'g',
+              'value': 150.67,
+              'fx_start': Timestamp('2020-11-25 00:00:00'),
+              'fx_end': Timestamp('2020-11-27 00:00:00'),
+              'direction': -1,
+          }
+        """
     assert len(bars) > 0
     bar = bars[-1].copy()
 
@@ -120,24 +140,48 @@ def update_new_bars(bars, new_bars: list, trade_date: list):
         new_bars.append(bar)
         return False
 
-    # 没有包含关系，需要进行分型识别，趋势有可能改变
-    if (cur_h > last_h and cur_l > last_l) or (cur_h < last_h and cur_l < last_l):
-        bar.update(direction=direction)
-        new_bars.append(bar)
-        return True
-
     last_direction = last_bar.get('direction')
 
-    # 有包含关系，不需要进行分型识别，趋势不改变
-    # if (cur_h <= last_h and cur_l >= last_l) or (cur_h >= last_h and cur_l <= last_l):
-    new_bars.pop(-1)  # 有包含关系的前一根数据被删除，这里是个技巧,todo 但会导致实际的高低点消失,只能低级别取处理
+    # 没有包含关系，需要进行分型识别，趋势有可能改变
+    if (cur_h > last_h and cur_l > last_l) or (cur_h < last_h and cur_l < last_l):
+        new_bars.append(bar)
+        # 分型识别
+        if last_direction * direction < 0:
+
+            bar.update(direction=direction)
+            if direction < 0:
+                fx = {
+                    "date": last_bar['date'],
+                    "fx_mark": "g",
+                    "value": last_bar['high'],
+                    "fx_start": new_bars[-2]['date'],  # 记录分型的开始和结束时间
+                    "fx_end": bar['date'],
+                    "direction": bar['direction'],
+                }
+            else:
+                fx = {
+                    "date": last_bar['date'],
+                    "fx_mark": "d",
+                    "value": last_bar['low'],
+                    "fx_start": new_bars[-2]['date'],  # 记录分型的开始和结束时间
+                    "fx_end": bar['date'],
+                    "direction": bar['direction'],
+                }
+            fx_list.append(fx)
+            return True
+        bar.update(direction=last_direction+np.sign(last_direction))
+        return False
+
+    # 有包含关系，不需要进行分型识别，趋势不改变,direction数值增加
+    bar.update(direction=last_direction+np.sign(last_direction))
+    new_bars.pop(-1)  # 有包含关系的前一根数据被删除，这里是个技巧
     # 有包含关系，按方向分别处理,同时需要更新日期
-    if last_direction == 1:
+    if last_direction > 0:
         if cur_h < last_h:
             bar.update(high=last_h, date=last_dt)
         if cur_l < last_l:
             bar.update(low=last_l)
-    elif last_direction == -1:
+    elif last_direction < 0:
         if cur_l > last_l:
             bar.update(low=last_l, date=last_dt)
         if cur_h > last_h:
@@ -146,69 +190,8 @@ def update_new_bars(bars, new_bars: list, trade_date: list):
         logging.error('{} last_direction: {} is wrong'.format(last_dt, last_direction))
         raise ValueError
 
-    # 和前一根K线方向一致
-    bar.update(direction=last_direction)
-
     new_bars.append(bar)
     return False
-
-
-def update_fx(new_bars: list, fx_list: list):
-    """更新分型序列
-    分型记对象样例：
-     {
-         'date': Timestamp('2020-11-26 00:00:00'),
-          'fx_mark': 'd',
-          'value': 138.0,
-          'fx_start': Timestamp('2020-11-25 00:00:00'),
-          'fx_end': Timestamp('2020-11-27 00:00:00'),
-          'direction': 1,
-          'fx_power': 'weak'
-      }
-
-     {
-         'date': Timestamp('2020-11-26 00:00:00'),
-          'fx_mark': 'g',
-          'value': 150.67,
-          'fx_start': Timestamp('2020-11-25 00:00:00'),
-          'fx_end': Timestamp('2020-11-27 00:00:00'),
-          'direction': -1,
-          'fx_power': 'strong'
-      }
-    """
-    # 至少3根k线才能确定分型
-    assert len(new_bars) >= 3
-
-    bar1, bar2, bar3 = new_bars[-3], new_bars[-2], new_bars[-1]
-    bar1_mid = (bar1['high'] - bar1['low']) / 2 + bar1['low']
-
-    if bar1['high'] < bar2['high'] > bar3['high']:
-        fx = {
-            "date": bar2['date'],
-            "fx_mark": "g",
-            "value": bar2['high'],
-            "fx_start": bar1['date'],  # 记录分型的开始和结束时间
-            "fx_end": bar3['date'],
-            "direction": bar3['direction'],
-            'fx_power': 'strong' if bar3['close'] < bar1_mid else 'weak'
-        }
-        fx_list.append(fx)
-        return True
-
-    elif bar1['low'] > bar2['low'] < bar3['low']:
-        fx = {
-            "date": bar2['date'],
-            "fx_mark": "d",
-            "value": bar2['low'],
-            "fx_start": bar1['date'],
-            "fx_end": bar3['date'],
-            "direction": bar3['direction'],
-            'fx_power': 'strong' if bar3['close'] > bar1_mid else 'weak',
-        }
-        fx_list.append(fx)
-        return True
-    else:
-        return False
 
 
 def update_bi(new_bars: list, fx_list: list, bi_list: list, trade_date: list):
@@ -243,12 +226,12 @@ def update_bi(new_bars: list, fx_list: list, bi_list: list, trade_date: list):
     bi = fx_list[-1].copy()
 
     # bi不需要考虑转折的分型强度
-    bi.pop('fx_power')
+    # bi.pop('fx_power')
     # bi.update(code=self.code)  # 存储数据库需要
     # 没有笔时.最开始两个分型作为第一笔，增量更新时从数据库取出两个端点构成的笔时确定的
     if len(bi_list) < 1:
         bi2 = fx_list[-2].copy()
-        bi2.pop('fx_power')
+        # bi2.pop('fx_power')
         # bi2.update(code=self.code)
         bi_list.append(bi2)
         bi_list.append(bi)
@@ -257,7 +240,7 @@ def update_bi(new_bars: list, fx_list: list, bi_list: list, trade_date: list):
     last_bi = bi_list[-1]
 
     bar = new_bars[-1].copy()
-    bar.update(value=bar['high'] if bar['direction'] == 1 else bar['low'])
+    bar.update(value=bar['high'] if bar['direction'] > 0 else bar['low'])
 
     # k 线确认模式
     if bar['date'] > bi['fx_end']:
@@ -272,7 +255,7 @@ def update_bi(new_bars: list, fx_list: list, bi_list: list, trade_date: list):
             kn_inside = trade_date.index(bar['date']) - trade_date.index(last_bi['fx_end']) - 1
 
             # 必须被和笔方向相同趋势的k线代替，相反方向的会形成分型，由分型处理
-            if kn_inside > 2 and bar['direction'] == last_bi['direction']:  # 两个分型间至少有1根k线，端点有可能不是高低点
+            if kn_inside > 2 and bar['direction'] * last_bi['direction'] > 0:  # 两个分型间至少有1根k线，端点有可能不是高低点
                 bi_list.append(bar)
                 return True
 
@@ -287,7 +270,7 @@ def update_bi(new_bars: list, fx_list: list, bi_list: list, trade_date: list):
                 return True
 
         else:  # 原有未出现分型笔的延续，todo,只能替代原趋势，需要增加assert
-            assert bar['direction'] == last_bi['direction']
+            assert bar['direction'] * last_bi['direction'] > 0
             bi_list[-1] = bar
             return False
 
@@ -327,8 +310,8 @@ def update_bi(new_bars: list, fx_list: list, bi_list: list, trade_date: list):
                 #     print('try')
 
                 index = index - 1
-            if 'fx_power' in bi:
-                bi.pop('fx_power')
+            # if 'fx_power' in bi:
+            #     bi.pop('fx_power')
                 # bi.update(code=self.code)  # 存储数据库需要
 
             bi_list.append(bi)
@@ -473,7 +456,7 @@ def update_xd(bi_list: list, xd_list: XdList):
                             bi_list[index]['value'] < xd['value']:
                         return False
                 except Exception as err:
-                    util_log_info('Last xd {}:{}'.fromat(last_xd['date'], err))
+                    util_log_info('Last xd {}:{}'.format(last_xd['date'], err))
 
                 while bi['date'] > last_xd['date']:
                     if xd['value'] > bi['value']:
@@ -645,13 +628,9 @@ class CzscBase:
 
     def update(self):
         # 有包含关系时，不可能有分型出现，不出现分型时才需要
-        if not update_new_bars(bars=self._bars, new_bars=self._new_bars, trade_date=self._trade_date):
-            return
 
-        update_fx(new_bars=self._new_bars, fx_list=self._fx_list)
+        update_fx(bars=self._bars, new_bars=self._new_bars, fx_list=self._fx_list, trade_date=self._trade_date)
 
-        # 至少两个分型才能形成笔
-        # todo 即使没有分型，bar 来了后也可以通过时间个价格来确认分型，不是必须等到分型出现，最后一笔用当前bar的最低或者最高点代替
         if not update_bi(
                 new_bars=self._new_bars, fx_list=self._fx_list, bi_list=self._bi_list, trade_date=self._trade_date
         ):
@@ -706,8 +685,8 @@ class CzscMongo(CzscBase):
         else:
             start = '1990-01-01'
 
-        # self.data = get_bar(code, start, freq=freq, exchange=exchange)
-        self.data = get_bar(code, start, end='2016-9-28', freq=freq, exchange=exchange)
+        self.data = get_bar(code, start, freq=freq, exchange=exchange)
+        # self.data = get_bar(code, start, end='2016-9-28', freq=freq, exchange=exchange)
 
     def draw(self, chart_path=None):
         chart = kline_pro(
@@ -1105,7 +1084,7 @@ def main_consumer():
 
 
 def main_mongo():
-    czsc_mongo = CzscMongo(code='ml8', freq='day', exchange='dce')
+    czsc_mongo = CzscMongo(code='rul8', freq='day', exchange='dce')
     czsc_mongo.run()
     czsc_mongo.draw()
 
