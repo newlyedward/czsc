@@ -34,6 +34,8 @@ from pytdx.reader import TdxDailyBarReader, TdxExHqDailyBarReader, TdxMinBarRead
 
 from czsc.Setting import TDX_DIR
 from czsc.Utils import util_log_info
+from czsc.Data.frequency import parse_frequency_str
+from czsc.Data.resample import resample_from_daily_data
 
 _SH_DIR = '{}{}{}'.format(TDX_DIR, os.sep, 'vipdoc\\sh')
 _SZ_DIR = '{}{}{}'.format(TDX_DIR, os.sep, 'vipdoc\\sz')
@@ -160,7 +162,7 @@ def _get_ds_list():
     pattern = "^(?P<tdx_code>\d{1,3})#(?P<code>.+)\.day"
     data = [re.match(pattern, x) for x in ds_list]
     try:    # 注释条码用来显示pattern不能识别的文件名
-        # for i, x in enumerate(data):
+        # for i, x in enumerate(Data):
         #     if not x:
         #         util_log_info('{}'.format(ds_list[i]))
         ds_df = pd.DataFrame([x.groupdict() for x in data])
@@ -202,16 +204,16 @@ def _get_tdx_code_from_security_dataframe(code, exchange):
 
 def _generate_path(code, freq, tdx_code):
     # code = code.upper()
-    # freq = freq.lower()
+    # standard_freq = standard_freq.lower()
 
     ext = {
-        'day': '.day',
+        'D': '.day',
         '5min': '.lc5',
         '1min': '.lc1',
     }
 
     dir = {
-        'day': 'lday',
+        'D': 'lday',
         '5min': 'fzline',
         '1min': '.minline',
     }
@@ -239,7 +241,7 @@ def get_bar(code, start=None, end=None, freq='day', exchange=None):
     股票成交量 volume 单位是100股
     """
     code = code.upper()
-    freq = freq.lower()
+    standard_freq = parse_frequency_str(freq)
 
     try:
         tdx_code = _get_tdx_code_from_security_dataframe(code, exchange)
@@ -247,26 +249,35 @@ def get_bar(code, start=None, end=None, freq='day', exchange=None):
         util_log_info("Can't get tdx_code from {}".format(code))
         return
 
-    file_path = _generate_path(code, freq, tdx_code)
+    if standard_freq in ['D', 'w', 'M', 'Q', 'Y']:
+        file_path = _generate_path(code, 'D', tdx_code)
+    elif standard_freq in ['1min', '5min', '30min', '60min']:
+        file_path = _generate_path(code, '5min', tdx_code)
+    elif standard_freq in ['1min']:
+        file_path = _generate_path(code, '1min', tdx_code)
+    else:
+        util_log_info('Not supported frequency {}'.format(freq))
+        return
 
     if not file_path:
         return
 
+    # 统一freq的数据结构
     if tdx_code in ['sh', 'sz']:
-        if freq in ['day']:
+        if standard_freq in ['D', 'w', 'M', 'Q', 'Y']:
             reader = TdxDailyBarReader()
             df = reader.get_df(file_path)
-        elif freq in ['1min', '5min']:
+        elif standard_freq in ['1min', '5min', '30min', '60min']:
             reader = TdxLCMinBarReader()
             df = reader.get_df(file_path)
         else:
             util_log_info('Not supported frequency {}'.format(freq))
             return
     else:
-        if freq in ['day']:
+        if standard_freq in ['D', 'w', 'M', 'Q', 'Y']:
             reader = TdxExHqDailyBarReader()
             df = reader.get_df(file_path)
-        elif freq in ['1min', '5min']:
+        elif standard_freq in ['1min', '5min', '30min', '60min']:
             reader = TdxLCMinBarReader()
             df = reader.get_df(file_path)
         else:
@@ -286,7 +297,7 @@ def get_bar(code, start=None, end=None, freq='day', exchange=None):
         exchange = recorder['exchange']
 
     if instrument in ['future', 'option']:
-        df.rename(columns={'amount': "position", "jiesuan": "settle"})
+        df.rename(columns={'amount': "position", "jiesuan": "settle"}, inplace=True)
 
     if start:
         start = pd.to_datetime(start)
@@ -299,6 +310,8 @@ def get_bar(code, start=None, end=None, freq='day', exchange=None):
     df['date'] = df.index
     df = df.assign(code=code, exchange=exchange)
 
+    if standard_freq in ['w', 'M', 'Q', 'Y']:
+        df = resample_from_daily_data(df, standard_freq)
     return df
 
 
@@ -307,4 +320,4 @@ if __name__ == "__main__":
     # sz_sh_df = _get_sh_sz_list()
     # security_df = get_security_list()
     # hq = fetch_future_day('rbl8')
-    hq = get_bar('600633')
+    hq = get_bar('rbl8', freq='week')
