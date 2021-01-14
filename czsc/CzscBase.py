@@ -301,18 +301,10 @@ def update_bi(new_bars: list, fx_list: list, bi_list: list, trade_date: list):
                         or (bi['fx_mark'] == 'g' and 'g' == fx_list[index]['fx_mark']
                             and bi['value'] < fx_list[index]['value']):
                     bi = fx_list[index].copy()
-
-                # if (bi['fx_mark'] == 'd' and 'd' == self._fx_list[index]['fx_mark']
-                #         and bi['value'] > self._fx_list[index]['value']) \
-                #     or (bi['fx_mark'] == 'g' and 'g' == self._fx_list[index]['fx_mark']
-                #         and bi['value'] < self._fx_list[index]['value']):
-                #     bi = self._fx_list[index].copy()
-                #     print('try')
+                    # 分型结尾不变
+                    bi['fx_end'] = fx_list[-1]['fx_end']
 
                 index = index - 1
-            # if 'fx_power' in bi:
-            #     bi.pop('fx_power')
-                # bi.update(code=self.code)  # 存储数据库需要
 
             bi_list.append(bi)
             return True
@@ -478,6 +470,7 @@ def update_zs(bi_list: list, zs_list: list):
           'GG': 中枢最低点,
           'DD': 中枢最高点，
           'bi_list': list[dict]
+          'location': 中枢位置
       }
     """
     if len(zs_list) < 1:
@@ -490,7 +483,7 @@ def update_zs(bi_list: list, zs_list: list):
             'GG': [zg],  # 初始用list储存，记录高低点的变化过程，中枢完成时可能会回退
             'DD': [zd],  # 根据最高最低点的变化过程可以识别时扩散，收敛，向上还是向下的形态
             'bi_list': bi_list[:2],
-            # 'location': 0     # 初始状态为0，说明没有方向， -1 表明下降第1割中枢， +2 表明上升第2个中枢
+            'location': 0     # 初始状态为0，说明没有方向， -1 表明下降第1割中枢， +2 表明上升第2个中枢
         }
         zs_list.append(zs)
         return False
@@ -514,7 +507,8 @@ def update_zs(bi_list: list, zs_list: list):
                 'ZD': zs_end,
                 'GG': [bi],
                 'DD': [zs_end],
-                'bi_list': [zs_end, bi]
+                'bi_list': [zs_end, bi],
+                'location': -1 if last_zs['location'] >=0 else last_zs['location']-1
             }
             zs_list.append(zs)
             return True
@@ -537,7 +531,8 @@ def update_zs(bi_list: list, zs_list: list):
                 'ZD': bi,
                 'GG': [zs_end],
                 'DD': [bi],
-                'bi_list': [zs_end, bi]
+                'bi_list': [zs_end, bi],
+                'location': 1 if last_zs['location'] <= 0 else last_zs['location'] - 1
             }
             zs_list.append(zs)
             return True
