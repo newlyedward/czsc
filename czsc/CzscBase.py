@@ -242,15 +242,14 @@ def update_bi(new_bars: list, fx_list: list, bi_list: list, trade_date: list):
     bar = new_bars[-1].copy()
     bar.update(value=bar['high'] if bar['direction'] > 0 else bar['low'])
 
-    # k 线确认模式
+    # k 线确认模式，当前K线的日期比分型K线靠后，说明进来的数据时K线
     if bar['date'] > bi['fx_end']:
-        # 时间确认,函数算了首尾，所以要删除，todo 包含的情况程序走不到这里
-        if 'fx_mark' in last_bi:
+        if 'fx_mark' in last_bi:      # bi的结尾时分型
             # 趋势延续替代,首先确认是否延续
             if (last_bi['fx_mark'] == 'g' and bar['high'] > last_bi['value']) \
                     or (last_bi['fx_mark'] == 'd' and bar['low'] < last_bi['value']):
                 bi_list[-1] = bar
-                return False
+                return True
 
             kn_inside = trade_date.index(bar['date']) - trade_date.index(last_bi['fx_end']) - 1
 
@@ -272,19 +271,19 @@ def update_bi(new_bars: list, fx_list: list, bi_list: list, trade_date: list):
         else:  # 原有未出现分型笔的延续，todo,只能替代原趋势，需要增加assert
             assert bar['direction'] * last_bi['direction'] > 0
             bi_list[-1] = bar
-            return False
+            return True
 
     # 非分型结尾笔，直接替换成分型, 没有新增笔，后续不需要处理，同一个端点确认
     if 'fx_mark' not in last_bi or bi['date'] == last_bi['date']:
         bi_list[-1] = bi
-        return False
+        return True
 
     # 分型处理，连续高低点处理，只判断是否后移,没有增加笔，不需要处理
     if last_bi['fx_mark'] == bi['fx_mark']:
         if (last_bi['fx_mark'] == 'g' and last_bi['value'] < bi['value']) \
                 or (last_bi['fx_mark'] == 'd' and last_bi['value'] > bi['value']):
             bi_list[-1] = bi
-            return False
+            return True
     else:  # 笔确认是条件1、时间破坏，两个不同分型间至少有一根K线，2、价格破坏，向下的一笔破坏了上一笔的低点
         # 时间确认,函数算了首尾，所以要删除
         kn_inside = trade_date.index(bi['fx_start']) - trade_date.index(last_bi['fx_end']) - 1
@@ -370,7 +369,7 @@ def update_xd(bi_list: list, xd_list: XdList):
       }
     """
     # 至少3根同类型分型才可能出现线段，最后1根bi不确定，因此最后一段也不确定
-    if len(bi_list) < 5:
+    if len(bi_list) < 4:
         return False
 
     if len(xd_list) < 1:
@@ -385,21 +384,30 @@ def update_xd(bi_list: list, xd_list: XdList):
             xd_list.append(bi_list[0])
         return True
 
-    bi4 = bi_list[-4]
-    xd = bi_list[-2]
+    bi3 = bi_list[-3]
+    xd = bi_list[-1]
     last_xd = xd_list[-1]
     xd2 = xd_list[-2]
 
-    # todo 只用assert?
-    if xd['date'] <= last_xd['date'] or 'fx_mark' not in xd:
-        # print('last {} and now {}'.format(last_xd['date'], xd['date']))
-        return False
+    # 非分型结尾段，直接替换成分型, 没有新增段，后续不需要处理，同一个端点确认
+    if 'fx_mark' not in last_xd or xd['date'] == last_xd['date']:
+        xd_list[-1] = xd           # 日期相等的情况是否已经在内存中修改过了？
+        # print('last {} == now {}'.format(last_xd['date'], xd['date']))
+        return True
 
-    if xd['fx_mark'] == 'g':
+    assert xd['date'] > last_xd['date']
+    # if xd['date'] <= last_xd['date']:   #  or 'fx_mark' not in xd 不应该出现这种情况
+    #     print('last {} >= now {}'.format(last_xd['date'], xd['date']))
+    #     return False
+
+    # if 'fx_mark' not in xd:
+    #     print('fx_mark not in {}'.format(last_xd['date'], xd['date']))
+
+    if bi3['fx_mark'] == 'g':
         # 同向延续
         if last_xd['fx_mark'] == 'g' and xd['value'] > last_xd['value']:
             xd_list[-1] = xd
-            return False
+            return True
         # 反向判断
         elif last_xd['fx_mark'] == 'd':
             # 价格判断
@@ -407,13 +415,13 @@ def update_xd(bi_list: list, xd_list: XdList):
                 xd_list.append(xd)
                 return True
             # 出现三笔破坏线段，连续两笔，一笔比一笔高,寻找段之间的最高点
-            elif bi4['date'] > last_xd['date'] and xd['value'] > bi4['value']:
-                index = -6
+            elif bi3['date'] > last_xd['date'] and xd['value'] > bi3['value']:
+                index = -5
                 bi = bi_list[index]
                 # 连续两个高点没有碰到段前面一个低点
                 try:
                     if bi['date'] < last_xd['date'] and \
-                            bi_list[index - 1]['value'] > bi4['value'] and \
+                            bi_list[index - 1]['value'] > bi3['value'] and \
                             bi_list[index]['value'] > xd['value']:
                         return False
                 except Exception as err:
@@ -426,11 +434,11 @@ def update_xd(bi_list: list, xd_list: XdList):
                     bi = bi_list[index]
                 xd_list.append(xd)
                 return True
-    elif xd['fx_mark'] == 'd':
+    elif bi3['fx_mark'] == 'd':
         # 同向延续
         if last_xd['fx_mark'] == 'd' and xd['value'] < last_xd['value']:
             xd_list[-1] = xd
-            return False
+            return True
         # 反向判断
         elif last_xd['fx_mark'] == 'g':
             # 价格判断
@@ -438,13 +446,13 @@ def update_xd(bi_list: list, xd_list: XdList):
                 xd_list.append(xd)
                 return True
             # 出现三笔破坏线段，连续两笔，一笔比一笔低,将最低的一笔作为段的起点，避免出现最低点不是端点的问题
-            elif bi4['date'] > last_xd['date'] and xd['value'] < bi4['value']:
-                index = -6
+            elif bi3['date'] > last_xd['date'] and xd['value'] < bi3['value']:
+                index = -5
                 bi = bi_list[index]
                 # 连续两个个低点没有碰到段前面一高低点
                 try:
                     if bi['date'] < last_xd['date'] and \
-                            bi_list[index - 1]['value'] < bi4['value'] and \
+                            bi_list[index - 1]['value'] < bi3['value'] and \
                             bi_list[index]['value'] < xd['value']:
                         return False
                 except Exception as err:
@@ -1079,7 +1087,7 @@ def main_consumer():
 
 
 def main_mongo():
-    czsc_mongo = CzscMongo(code='rul8', freq='day', exchange='dce')
+    czsc_mongo = CzscMongo(code='600633', freq='day', exchange='dce')
     czsc_mongo.run()
     czsc_mongo.draw()
 
