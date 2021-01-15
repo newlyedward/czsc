@@ -169,11 +169,11 @@ def update_fx(bars, new_bars: list, fx_list: list, trade_date: list):
                 }
             fx_list.append(fx)
             return True
-        bar.update(direction=last_direction+np.sign(last_direction))
+        bar.update(direction=last_direction + np.sign(last_direction))
         return False
 
     # 有包含关系，不需要进行分型识别，趋势不改变,direction数值增加
-    bar.update(direction=last_direction+np.sign(last_direction))
+    bar.update(direction=last_direction + np.sign(last_direction))
     new_bars.pop(-1)  # 有包含关系的前一根数据被删除，这里是个技巧
     # 有包含关系，按方向分别处理,同时需要更新日期
     if last_direction > 0:
@@ -244,7 +244,7 @@ def update_bi(new_bars: list, fx_list: list, bi_list: list, trade_date: list):
 
     # k 线确认模式，当前K线的日期比分型K线靠后，说明进来的数据时K线
     if bar['date'] > bi['fx_end']:
-        if 'fx_mark' in last_bi:      # bi的结尾时分型
+        if 'fx_mark' in last_bi:  # bi的结尾时分型
             # 趋势延续替代,首先确认是否延续
             if (last_bi['fx_mark'] == 'g' and bar['high'] > last_bi['value']) \
                     or (last_bi['fx_mark'] == 'd' and bar['low'] < last_bi['value']):
@@ -324,7 +324,7 @@ class XdList(object):
 
     def __init__(self, xd_list=[], zs_list=[]):
         # item存放数据元素
-        self.xd_list = xd_list.copy()   # 否则指向同一个地址
+        self.xd_list = xd_list.copy()  # 否则指向同一个地址
         # 低级别的中枢
         self.zs_list = zs_list.copy()
         # next是低一级别的线段
@@ -391,17 +391,10 @@ def update_xd(bi_list: list, xd_list: XdList):
 
     # 非分型结尾段，直接替换成分型, 没有新增段，后续不需要处理，同一个端点确认
     if 'fx_mark' not in last_xd or xd['date'] == last_xd['date']:
-        xd_list[-1] = xd           # 日期相等的情况是否已经在内存中修改过了？
-        # print('last {} == now {}'.format(last_xd['date'], xd['date']))
+        xd_list[-1] = xd  # 日期相等的情况是否已经在内存中修改过了？
         return True
 
     assert xd['date'] > last_xd['date']
-    # if xd['date'] <= last_xd['date']:   #  or 'fx_mark' not in xd 不应该出现这种情况
-    #     print('last {} >= now {}'.format(last_xd['date'], xd['date']))
-    #     return False
-
-    # if 'fx_mark' not in xd:
-    #     print('fx_mark not in {}'.format(last_xd['date'], xd['date']))
 
     if bi3['fx_mark'] == 'g':
         # 同向延续
@@ -491,7 +484,7 @@ def update_zs(bi_list: list, zs_list: list):
             'GG': [zg],  # 初始用list储存，记录高低点的变化过程，中枢完成时可能会回退
             'DD': [zd],  # 根据最高最低点的变化过程可以识别时扩散，收敛，向上还是向下的形态
             'bi_list': bi_list[:2],
-            'location': 0     # 初始状态为0，说明没有方向， -1 表明下降第1割中枢， +2 表明上升第2个中枢
+            'location': 0  # 初始状态为0，说明没有方向， -1 表明下降第1割中枢， +2 表明上升第2个中枢
         }
         zs_list.append(zs)
         return False
@@ -499,6 +492,10 @@ def update_zs(bi_list: list, zs_list: list):
     # 确定性的笔参与中枢构建
     last_zs = zs_list[-1]
     bi = bi_list[-2]
+
+    if last_zs['bi_list'][-1]['date'] == bi['date']:
+        # 已经计算过中枢
+        return False
 
     if bi['fx_mark'] == 'g':
         # 三卖 ,滞后，实际出现了一买信号
@@ -516,7 +513,7 @@ def update_zs(bi_list: list, zs_list: list):
                 'GG': [bi],
                 'DD': [zs_end],
                 'bi_list': [zs_end, bi],
-                'location': -1 if last_zs['location'] >=0 else last_zs['location']-1
+                'location': -1 if last_zs['location'] >= 0 else last_zs['location'] - 1
             }
             zs_list.append(zs)
             return True
@@ -1087,7 +1084,7 @@ def main_consumer():
 
 
 def main_mongo():
-    czsc_mongo = CzscMongo(code='600633', freq='day', exchange='dce')
+    czsc_mongo = CzscMongo(code='rbl8', freq='day', exchange='dce')
     czsc_mongo.run()
     czsc_mongo.draw()
 
