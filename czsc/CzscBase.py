@@ -106,7 +106,7 @@ def update_fx(bars, new_bars: list, fx_list: list, trade_date: list):
               'value': 138.0,
               'fx_start': Timestamp('2020-11-25 00:00:00'),
               'fx_end': Timestamp('2020-11-27 00:00:00'),
-              'direction': 1,
+              'direction': >=1, 趋势持续的K线根数
           }
          {
              'date': Timestamp('2020-11-26 00:00:00'),
@@ -114,7 +114,7 @@ def update_fx(bars, new_bars: list, fx_list: list, trade_date: list):
               'value': 150.67,
               'fx_start': Timestamp('2020-11-25 00:00:00'),
               'fx_end': Timestamp('2020-11-27 00:00:00'),
-              'direction': -1,
+              'direction': <=-1,
           }
         """
     assert len(bars) > 0
@@ -194,6 +194,14 @@ def update_fx(bars, new_bars: list, fx_list: list, trade_date: list):
     return False
 
 
+def update_bi_eigenvalue(bi_list: list, trade_date: list):
+    bi = bi_list[-1]
+    last_bi = bi_list[-2]
+    bi.update(pct_change=(bi['value'] - last_bi['value']) / last_bi['value'])
+    kn = trade_date.index(bi['date']) - trade_date.index(last_bi['date']) + 1
+    bi.update(kn=kn)
+
+
 def update_bi(new_bars: list, fx_list: list, bi_list: list, trade_date: list):
     """更新笔序列
     笔标记对象样例：和分型标记序列结构一样
@@ -235,6 +243,7 @@ def update_bi(new_bars: list, fx_list: list, bi_list: list, trade_date: list):
         # bi2.update(code=self.code)
         bi_list.append(bi2)
         bi_list.append(bi)
+        update_bi_eigenvalue(bi_list, trade_date)
         return False
 
     last_bi = bi_list[-1]
@@ -249,6 +258,7 @@ def update_bi(new_bars: list, fx_list: list, bi_list: list, trade_date: list):
             if (last_bi['fx_mark'] == 'g' and bar['high'] > last_bi['value']) \
                     or (last_bi['fx_mark'] == 'd' and bar['low'] < last_bi['value']):
                 bi_list[-1] = bar
+                update_bi_eigenvalue(bi_list, trade_date)
                 return True
 
             kn_inside = trade_date.index(bar['date']) - trade_date.index(last_bi['fx_end']) - 1
@@ -256,6 +266,7 @@ def update_bi(new_bars: list, fx_list: list, bi_list: list, trade_date: list):
             # 必须被和笔方向相同趋势的k线代替，相反方向的会形成分型，由分型处理
             if kn_inside > 2 and bar['direction'] * last_bi['direction'] > 0:  # 两个分型间至少有1根k线，端点有可能不是高低点
                 bi_list.append(bar)
+                update_bi_eigenvalue(bi_list, trade_date)
                 return True
 
             # 只有一个端点，没有价格确认
@@ -266,16 +277,19 @@ def update_bi(new_bars: list, fx_list: list, bi_list: list, trade_date: list):
             if (last_bi['fx_mark'] == 'd' and bar['high'] > bi_list[-2]['value']) \
                     or (last_bi['fx_mark'] == 'g' and bar['low'] < bi_list[-2]['value']):
                 bi_list.append(bar)
+                update_bi_eigenvalue(bi_list, trade_date)
                 return True
 
         else:  # 原有未出现分型笔的延续，todo,只能替代原趋势，需要增加assert
             assert bar['direction'] * last_bi['direction'] > 0
             bi_list[-1] = bar
+            update_bi_eigenvalue(bi_list, trade_date)
             return True
 
     # 非分型结尾笔，直接替换成分型, 没有新增笔，后续不需要处理，同一个端点确认
     if 'fx_mark' not in last_bi or bi['date'] == last_bi['date']:
         bi_list[-1] = bi
+        update_bi_eigenvalue(bi_list, trade_date)
         return True
 
     # 分型处理，连续高低点处理，只判断是否后移,没有增加笔，不需要处理
@@ -283,6 +297,7 @@ def update_bi(new_bars: list, fx_list: list, bi_list: list, trade_date: list):
         if (last_bi['fx_mark'] == 'g' and last_bi['value'] < bi['value']) \
                 or (last_bi['fx_mark'] == 'd' and last_bi['value'] > bi['value']):
             bi_list[-1] = bi
+            update_bi_eigenvalue(bi_list, trade_date)
             return True
     else:  # 笔确认是条件1、时间破坏，两个不同分型间至少有一根K线，2、价格破坏，向下的一笔破坏了上一笔的低点
         # 时间确认,函数算了首尾，所以要删除
@@ -306,6 +321,7 @@ def update_bi(new_bars: list, fx_list: list, bi_list: list, trade_date: list):
                 index = index - 1
 
             bi_list.append(bi)
+            update_bi_eigenvalue(bi_list, trade_date)
             return True
 
         # 只有一个端点，没有价格确认
@@ -316,6 +332,7 @@ def update_bi(new_bars: list, fx_list: list, bi_list: list, trade_date: list):
         if (bi['fx_mark'] == 'g' and bi['value'] > bi_list[-2]['value']) \
                 or (bi['fx_mark'] == 'd' and bi['value'] < bi_list[-2]['value']):
             bi_list.append(bi)
+            update_bi_eigenvalue(bi_list, trade_date)
             return True
 
 
@@ -461,7 +478,7 @@ def update_xd(bi_list: list, xd_list: XdList):
     return False
 
 
-def update_zs(bi_list: list, zs_list: list):
+def update_zs(xd_list: list, zs_list: list):
     """
     {
           'zs_start': 进入段的起点
@@ -475,15 +492,15 @@ def update_zs(bi_list: list, zs_list: list):
       }
     """
     if len(zs_list) < 1:
-        assert len(bi_list) < 4
-        zg = bi_list[0] if bi_list[0]['fx_mark'] == 'g' else bi_list[1]
-        zd = bi_list[0] if bi_list[0]['fx_mark'] == 'd' else bi_list[1]
+        assert len(xd_list) < 4
+        zg = xd_list[0] if xd_list[0]['fx_mark'] == 'g' else xd_list[1]
+        zd = xd_list[0] if xd_list[0]['fx_mark'] == 'd' else xd_list[1]
         zs = {
             'ZG': zg,
             'ZD': zd,
             'GG': [zg],  # 初始用list储存，记录高低点的变化过程，中枢完成时可能会回退
             'DD': [zd],  # 根据最高最低点的变化过程可以识别时扩散，收敛，向上还是向下的形态
-            'bi_list': bi_list[:2],
+            'bi_list': xd_list[:2],
             'location': 0  # 初始状态为0，说明没有方向， -1 表明下降第1割中枢， +2 表明上升第2个中枢
         }
         zs_list.append(zs)
@@ -491,7 +508,7 @@ def update_zs(bi_list: list, zs_list: list):
 
     # 确定性的笔参与中枢构建
     last_zs = zs_list[-1]
-    bi = bi_list[-2]
+    bi = xd_list[-2]
 
     if last_zs['bi_list'][-1]['date'] == bi['date']:
         # 已经计算过中枢
@@ -507,7 +524,7 @@ def update_zs(bi_list: list, zs_list: list):
             )
 
             zs = {
-                'zs_start': bi_list[-4],
+                'zs_start': xd_list[-4],
                 'ZG': bi,
                 'ZD': zs_end,
                 'GG': [bi],
@@ -531,7 +548,7 @@ def update_zs(bi_list: list, zs_list: list):
                 GG=last_zs['GG'].pop(-1) if zs_end['date'] == last_zs['GG'][-1]['date'] else last_zs['GG']
             )
             zs = {
-                'zs_start': bi_list[-4],
+                'zs_start': xd_list[-4],
                 'ZG': zs_end,
                 'ZD': bi,
                 'GG': [zs_end],
@@ -564,8 +581,8 @@ class CzscBase:
         self._bars = []
         self._new_bars = []
         self._fx_list = []
-        self._bi_list = []
-        self._xd_list = XdList()
+        # self._bi_list = []
+        self._xd_list = XdList()     # bi作为线段的head
         # self._zs_list = []
         self._sig_list = []
 
@@ -632,18 +649,17 @@ class CzscBase:
         update_fx(bars=self._bars, new_bars=self._new_bars, fx_list=self._fx_list, trade_date=self._trade_date)
 
         if not update_bi(
-                new_bars=self._new_bars, fx_list=self._fx_list, bi_list=self._bi_list, trade_date=self._trade_date
+                new_bars=self._new_bars, fx_list=self._fx_list, bi_list=self._xd_list, trade_date=self._trade_date
         ):
             return
 
         # 新增确定性的笔才处理段
-        bi_list = self._bi_list
         xd_list = self._xd_list
         zs_list = xd_list.zs_list
         result = True
         while result:
-            result = update_xd(bi_list=bi_list, xd_list=xd_list)
-            update_zs(bi_list=bi_list, zs_list=zs_list)
+
+            update_zs(xd_list=xd_list, zs_list=zs_list)
 
             if result:
 
@@ -658,8 +674,7 @@ class CzscBase:
                     xd_list = xd_list.next
                     zs_list = xd_list.zs_list
 
-        # if update_zs(bi_list=self._bi_list, zs_list=self._zs_list):
-        #     return
+            result = update_xd(bi_list=bi_list, xd_list=xd_list)
 
     #  必须实现,每次输入一个行情数据，然后调用update看是否需要更新
     def on_bar(self, bar):
@@ -690,7 +705,7 @@ class CzscMongo(CzscBase):
 
     def draw(self, chart_path=None):
         chart = kline_pro(
-            kline=self._bars, fx=self._fx_list, bi=self._bi_list,
+            kline=self._bars, fx=self._fx_list,
             bs=self._sig_list, xd=self._xd_list,
             # title=self.code, width='1440px', height='580px'
             title=self.code, width='2540px', height='850px'

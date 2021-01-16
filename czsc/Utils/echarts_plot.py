@@ -64,10 +64,7 @@ def heat_map(data: List[dict],
 
 def kline_pro(kline: List[dict],
               fx: List[dict] = None,
-              bi: List[dict] = None,
               xd=None,
-              # xd: XdList = None,
-              # zs: List[dict] = None,
               bs: List[dict] = None,
               title: str = "缠中说禅K线分析",
               width: str = "1400px",
@@ -212,7 +209,7 @@ def kline_pro(kline: List[dict],
                 )) for x in temp_xd.zs_list]
             temp_xd = temp_xd.next
             index = index + 1
-        # data = [[{"xAxis": x['bi_list'][0]['date'], "yAxis": x['ZG']['value']},
+        # Data = [[{"xAxis": x['bi_list'][0]['date'], "yAxis": x['ZG']['value']},
         #          {"xAxis": x['bi_list'][-1]['date'], "yAxis": x['ZD']['value']}] for x in xd.zs_list]
         chart_k.set_series_opts(
             markarea_opts=opts.MarkAreaOpts(is_silent=True, data=data)
@@ -251,26 +248,9 @@ def kline_pro(kline: List[dict],
         chart_fx.set_global_opts(xaxis_opts=grid0_xaxis_opts, legend_opts=legend_not_show_opts)
         chart_k = chart_k.overlap(chart_fx)
 
-    if bi:
-        # bi_dts = [x.get('dt', x['date']) for x in bi]
-        try:
-            bi_dts = [x['date'] for x in bi]
-        except:
-            bi_dts = [x['dt'] for x in bi]
-        bi_val = [x['value'] for x in bi]
-        chart_bi = Line()
-        chart_bi.add_xaxis(bi_dts)
-        chart_bi.add_yaxis(series_name="BI", y_axis=bi_val, is_selected=True,
-                           symbol="diamond", symbol_size=10, label_opts=label_not_show_opts,
-                           linestyle_opts=opts.LineStyleOpts(color="yellow", width=1, type_="dashed"),
-                           itemstyle_opts=opts.ItemStyleOpts(color="rgba(184, 117, 225, 1.0)", ))
-
-        chart_bi.set_global_opts(xaxis_opts=grid0_xaxis_opts, legend_opts=legend_not_show_opts)
-        chart_k = chart_k.overlap(chart_bi)
-
     if xd:
         index = 0
-        xd_colors = zs_colors[1:]
+        xd_colors = zs_colors
         while xd:
             xd_dts = [x['date'] for x in xd]
             xd_val = [x['value'] for x in xd]
@@ -282,7 +262,7 @@ def kline_pro(kline: List[dict],
             chart_xd.add_yaxis(series_name="XD{}".format(index), y_axis=xd_val, is_selected=True, symbol="triangle",
                                symbol_size=10,
                                linestyle_opts=opts.LineStyleOpts(
-                                   color=xd_color, width=index + 2, type_="solid"
+                                   color=xd_color, width=index + 1, type_="solid"
                                ),
                                itemstyle_opts=opts.ItemStyleOpts(color=xd_color)
                                )
