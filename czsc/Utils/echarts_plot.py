@@ -195,22 +195,19 @@ def kline_pro(kline: List[dict],
         data = []
         temp_xd = xd
         while temp_xd:
+            zs_color = zs_colors[index % len(zs_colors)]
             data = data + [opts.MarkAreaItem(
                 name='XD{}'.format(index),
                 x=(x['bi_list'][0]['date'], x['bi_list'][-1]['date']),
                 y=(x['ZG']['value'], x['ZD']['value']),
+                label_opts=opts.LabelOpts(color=zs_color),
                 itemstyle_opts=opts.ItemStyleOpts(
-                    color=zs_colors[index],
-                    # border_color=zs_colors[index],
-                    # border_width=1+index,
-                    # border_type='dashed',
+                    color=zs_color,
                     opacity=0.2,
-                    # area_color=zs_colors[index]
                 )) for x in temp_xd.zs_list]
             temp_xd = temp_xd.next
             index = index + 1
-        # Data = [[{"xAxis": x['bi_list'][0]['date'], "yAxis": x['ZG']['value']},
-        #          {"xAxis": x['bi_list'][-1]['date'], "yAxis": x['ZD']['value']}] for x in xd.zs_list]
+
         chart_k.set_series_opts(
             markarea_opts=opts.MarkAreaOpts(is_silent=True, data=data)
         )
@@ -233,11 +230,11 @@ def kline_pro(kline: List[dict],
     # 缠论结果
     # ------------------------------------------------------------------------------------------------------------------
     if fx:
-        # fx_dts = [x.get('dt', x['date']) for x in fx]
         try:
             fx_dts = [x['date'] for x in fx]
         except:
             fx_dts = [x['dt'] for x in fx]
+
         fx_val = [x['value'] for x in fx]
         chart_fx = Scatter()
         chart_fx.add_xaxis(fx_dts)
