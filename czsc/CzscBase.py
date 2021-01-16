@@ -385,7 +385,7 @@ def update_xd(bi_list: list, xd_list: XdList):
         return True
 
     bi3 = bi_list[-3]
-    xd = bi_list[-1]
+    xd = bi_list[-1].copy()
     last_xd = xd_list[-1]
     xd2 = xd_list[-2]
 
@@ -686,13 +686,14 @@ class CzscMongo(CzscBase):
             start = '1990-01-01'
 
         self.data = get_bar(code, start, freq=freq, exchange=exchange)
-        # self.data = get_bar(code, start, end='2016-9-28', freq=freq, exchange=exchange)
+        # self.Data = get_bar(code, start, end='2016-9-28', freq=freq, exchange=exchange)
 
     def draw(self, chart_path=None):
         chart = kline_pro(
             kline=self._bars, fx=self._fx_list, bi=self._bi_list,
             bs=self._sig_list, xd=self._xd_list,
-            title=self.code, width='1440px', height='580px'
+            # title=self.code, width='1440px', height='580px'
+            title=self.code, width='2540px', height='850px'
         )
 
         if not chart_path:
@@ -1084,7 +1085,7 @@ def main_consumer():
 
 
 def main_mongo():
-    czsc_mongo = CzscMongo(code='rbl8', freq='day', exchange='dce')
+    czsc_mongo = CzscMongo(code='rul8', freq='day', exchange='dce')
     czsc_mongo.run()
     czsc_mongo.draw()
 
