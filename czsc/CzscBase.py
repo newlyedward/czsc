@@ -219,6 +219,223 @@ class XdList(object):
     def append(self, value):
         self.xd_list.append(value)
 
+    def update_zs(self):
+        """
+        {
+              'zs_start': 进入段的起点
+              'zs_end':  离开段的终点
+              'ZG': 中枢高点,
+              'ZD': 中枢低点,
+              'GG': 中枢最低点,
+              'DD': 中枢最高点，
+              'bi_list': list[dict]
+              'location': 中枢位置
+          }
+        """
+        xd_list = self.xd_list
+        zs_list = self.zs_list
+
+        if len(zs_list) < 1:
+            assert len(xd_list) < 4
+            zg = xd_list[0] if xd_list[0]['fx_mark'] == 'g' else xd_list[1]
+            zd = xd_list[0] if xd_list[0]['fx_mark'] == 'd' else xd_list[1]
+            zs = {
+                'ZG': zg,
+                'ZD': zd,
+                'GG': [zg],  # 初始用list储存，记录高低点的变化过程，中枢完成时可能会回退
+                'DD': [zd],  # 根据最高最低点的变化过程可以识别时扩散，收敛，向上还是向下的形态
+                'bi_list': xd_list[:2],
+                'location': 0  # 初始状态为0，说明没有方向， -1 表明下降第1割中枢， +2 表明上升第2个中枢
+            }
+            zs_list.append(zs)
+            return False
+
+        # 确定性的笔参与中枢构建
+        last_zs = zs_list[-1]
+        bi = xd_list[-2]
+
+        if last_zs['bi_list'][-1]['date'] == bi['date']:
+            # 已经计算过中枢
+            return False
+
+        if bi['fx_mark'] == 'g':
+            # 三卖 ,滞后，实际出现了一买信号
+            if bi['value'] < last_zs['ZD']['value']:
+                zs_end = last_zs['bi_list'].pop(-1)
+                last_zs.update(
+                    zs_end=zs_end,
+                    DD=last_zs['DD'].pop(-1) if zs_end['date'] == last_zs['DD'][-1]['date'] else last_zs['DD']
+                )
+
+                zs = {
+                    'zs_start': xd_list[-4],
+                    'ZG': bi,
+                    'ZD': zs_end,
+                    'GG': [bi],
+                    'DD': [zs_end],
+                    'bi_list': [zs_end, bi],
+                    'location': -1 if last_zs['location'] >= 0 else last_zs['location'] - 1
+                }
+                zs_list.append(zs)
+                return True
+            elif bi['value'] < last_zs['ZG']['value']:
+                last_zs.update(ZG=bi)
+            # 有可能成为离开段
+            elif bi['value'] > last_zs['GG'][-1]['value']:
+                last_zs['GG'].append(bi)
+        elif bi['fx_mark'] == 'd':
+            # 三买，滞后，实际出现了一卖信号
+            if bi['value'] > last_zs['ZG']['value']:
+                zs_end = last_zs['bi_list'].pop(-1)
+                last_zs.update(
+                    zs_end=zs_end,
+                    GG=last_zs['GG'].pop(-1) if zs_end['date'] == last_zs['GG'][-1]['date'] else last_zs['GG']
+                )
+                zs = {
+                    'zs_start': xd_list[-4],
+                    'ZG': zs_end,
+                    'ZD': bi,
+                    'GG': [zs_end],
+                    'DD': [bi],
+                    'bi_list': [zs_end, bi],
+                    'location': 1 if last_zs['location'] <= 0 else last_zs['location'] - 1
+                }
+                zs_list.append(zs)
+                return True
+            elif bi['value'] > last_zs['ZD']['value']:
+                last_zs.update(ZD=bi)
+            # 有可能成为离开段
+            elif bi['value'] < last_zs['DD'][-1]['value']:
+                last_zs['DD'].append(bi)
+        else:
+            raise ValueError
+        last_zs['bi_list'].append(bi)
+
+        return False
+
+    def update_xd(self, trade_date: list):
+        """更新笔分型序列
+        分型记对象样例：
+         {
+             'date': Timestamp('2020-11-26 00:00:00'),
+              'fx_mark': 'd',
+              'value': 138.0,
+              'fx_start': Timestamp('2020-11-25 00:00:00'),
+              'fx_end': Timestamp('2020-11-27 00:00:00'),
+              'direction': 'up',
+              'fx_power': 'weak'
+          }
+
+         {
+             'date': Timestamp('2020-11-26 00:00:00'),
+              'fx_mark': 'g',
+              'value': 150.67,
+              'fx_start': Timestamp('2020-11-25 00:00:00'),
+              'fx_end': Timestamp('2020-11-27 00:00:00'),
+              'direction': 'down',
+              'fx_power': 'strong'
+          }
+        """
+        # 至少3根同类型分型才可能出现线段，最后1根bi不确定，因此最后一段也不确定
+        if self.next is None:
+            self.next = XdList()
+
+        bi_list = self.xd_list
+        xd_list = self.next
+
+        if len(bi_list) < 4:
+            return False
+
+        if len(xd_list) < 1:
+            # 线段不存在，初始化线段，找4个点的最高和最低点组成线段
+            bi_list = bi_list[:-1].copy()
+            bi_list = sorted(bi_list, key=lambda x: x['value'], reverse=False)
+            if bi_list[0]['date'] < bi_list[-1]['date']:
+                xd_list.append(bi_list[0])
+                xd_list.append(bi_list[-1])
+            else:
+                xd_list.append(bi_list[-1])
+                xd_list.append(bi_list[0])
+
+            update_xd_eigenvalue(xd_list, trade_date)
+            return True
+
+        bi3 = bi_list[-3]
+        xd = bi_list[-1].copy()
+        last_xd = xd_list[-1]
+        xd2 = xd_list[-2]
+
+        # 非分型结尾段，直接替换成分型, 没有新增段，后续不需要处理，同一个端点确认
+        if 'fx_mark' not in last_xd or xd['date'] == last_xd['date']:
+            xd_list[-1] = xd  # 日期相等的情况是否已经在内存中修改过了？
+            return True
+
+        assert xd['date'] > last_xd['date']
+
+        if bi3['fx_mark'] == 'g':
+            # 同向延续
+            if last_xd['fx_mark'] == 'g' and xd['value'] > last_xd['value']:
+                xd_list[-1] = xd
+                return True
+            # 反向判断
+            elif last_xd['fx_mark'] == 'd':
+                # 价格判断
+                if xd['value'] > xd2['value']:
+                    xd_list.append(xd)
+                    return True
+                # 出现三笔破坏线段，连续两笔，一笔比一笔高,寻找段之间的最高点
+                elif bi3['date'] > last_xd['date'] and xd['value'] > bi3['value']:
+                    index = -5
+                    bi = bi_list[index]
+                    # 连续两个高点没有碰到段前面一个低点
+                    try:
+                        if bi['date'] < last_xd['date'] and \
+                                bi_list[index - 1]['value'] > bi3['value'] and \
+                                bi_list[index]['value'] > xd['value']:
+                            return False
+                    except Exception as err:
+                        util_log_info('Last xd {}:{}'.format(last_xd['date'], err))
+
+                    while bi['date'] > last_xd['date']:
+                        if xd['value'] < bi['value']:
+                            xd = bi
+                        index = index - 2
+                        bi = bi_list[index]
+                    xd_list.append(xd)
+                    return True
+        elif bi3['fx_mark'] == 'd':
+            # 同向延续
+            if last_xd['fx_mark'] == 'd' and xd['value'] < last_xd['value']:
+                xd_list[-1] = xd
+                return True
+            # 反向判断
+            elif last_xd['fx_mark'] == 'g':
+                # 价格判断
+                if xd['value'] < xd2['value']:
+                    xd_list.append(xd)
+                    return True
+                # 出现三笔破坏线段，连续两笔，一笔比一笔低,将最低的一笔作为段的起点，避免出现最低点不是端点的问题
+                elif bi3['date'] > last_xd['date'] and xd['value'] < bi3['value']:
+                    index = -5
+                    bi = bi_list[index]
+                    # 连续两个个低点没有碰到段前面一高低点
+                    try:
+                        if bi['date'] < last_xd['date'] and \
+                                bi_list[index - 1]['value'] < bi3['value'] and \
+                                bi_list[index]['value'] < xd['value']:
+                            return False
+                    except Exception as err:
+                        util_log_info('Last xd {}:{}'.format(last_xd['date'], err))
+
+                    while bi['date'] > last_xd['date']:
+                        if xd['value'] > bi['value']:
+                            xd = bi
+                        index = index - 2
+                        bi = bi_list[index]
+                    xd_list.append(xd)
+                    return True
+        return False
+
 
 def update_xd_eigenvalue(bi_list: XdList, trade_date: list):
     bi = bi_list[-1]
@@ -362,222 +579,10 @@ def update_bi(new_bars: list, fx_list: list, bi_list: XdList, trade_date: list):
             return True
 
 
-def update_xd(xd_list: XdList, trade_date: list):
-    """更新笔分型序列
-    分型记对象样例：
-     {
-         'date': Timestamp('2020-11-26 00:00:00'),
-          'fx_mark': 'd',
-          'value': 138.0,
-          'fx_start': Timestamp('2020-11-25 00:00:00'),
-          'fx_end': Timestamp('2020-11-27 00:00:00'),
-          'direction': 'up',
-          'fx_power': 'weak'
-      }
-
-     {
-         'date': Timestamp('2020-11-26 00:00:00'),
-          'fx_mark': 'g',
-          'value': 150.67,
-          'fx_start': Timestamp('2020-11-25 00:00:00'),
-          'fx_end': Timestamp('2020-11-27 00:00:00'),
-          'direction': 'down',
-          'fx_power': 'strong'
-      }
-    """
-    # 至少3根同类型分型才可能出现线段，最后1根bi不确定，因此最后一段也不确定
-    if xd_list.next is None:
-        xd_list.next = XdList()
-
-    bi_list = xd_list
-    xd_list = bi_list.next
-
-    if len(bi_list) < 4:
-        return False
-
-    if len(xd_list) < 1:
-        # 线段不存在，初始化线段，找4个点的最高和最低点组成线段
-        bi_list = bi_list[:-1].copy()
-        bi_list = sorted(bi_list, key=lambda x: x['value'], reverse=False)
-        if bi_list[0]['date'] < bi_list[-1]['date']:
-            xd_list.append(bi_list[0])
-            xd_list.append(bi_list[-1])
-        else:
-            xd_list.append(bi_list[-1])
-            xd_list.append(bi_list[0])
-
-        update_xd_eigenvalue(xd_list, trade_date)
-        return True
-
-    bi3 = bi_list[-3]
-    xd = bi_list[-1].copy()
-    last_xd = xd_list[-1]
-    xd2 = xd_list[-2]
-
-    # 非分型结尾段，直接替换成分型, 没有新增段，后续不需要处理，同一个端点确认
-    if 'fx_mark' not in last_xd or xd['date'] == last_xd['date']:
-        xd_list[-1] = xd  # 日期相等的情况是否已经在内存中修改过了？
-        return True
-
-    assert xd['date'] > last_xd['date']
-
-    if bi3['fx_mark'] == 'g':
-        # 同向延续
-        if last_xd['fx_mark'] == 'g' and xd['value'] > last_xd['value']:
-            xd_list[-1] = xd
-            return True
-        # 反向判断
-        elif last_xd['fx_mark'] == 'd':
-            # 价格判断
-            if xd['value'] > xd2['value']:
-                xd_list.append(xd)
-                return True
-            # 出现三笔破坏线段，连续两笔，一笔比一笔高,寻找段之间的最高点
-            elif bi3['date'] > last_xd['date'] and xd['value'] > bi3['value']:
-                index = -5
-                bi = bi_list[index]
-                # 连续两个高点没有碰到段前面一个低点
-                try:
-                    if bi['date'] < last_xd['date'] and \
-                            bi_list[index - 1]['value'] > bi3['value'] and \
-                            bi_list[index]['value'] > xd['value']:
-                        return False
-                except Exception as err:
-                    util_log_info('Last xd {}:{}'.format(last_xd['date'], err))
-
-                while bi['date'] > last_xd['date']:
-                    if xd['value'] < bi['value']:
-                        xd = bi
-                    index = index - 2
-                    bi = bi_list[index]
-                xd_list.append(xd)
-                return True
-    elif bi3['fx_mark'] == 'd':
-        # 同向延续
-        if last_xd['fx_mark'] == 'd' and xd['value'] < last_xd['value']:
-            xd_list[-1] = xd
-            return True
-        # 反向判断
-        elif last_xd['fx_mark'] == 'g':
-            # 价格判断
-            if xd['value'] < xd2['value']:
-                xd_list.append(xd)
-                return True
-            # 出现三笔破坏线段，连续两笔，一笔比一笔低,将最低的一笔作为段的起点，避免出现最低点不是端点的问题
-            elif bi3['date'] > last_xd['date'] and xd['value'] < bi3['value']:
-                index = -5
-                bi = bi_list[index]
-                # 连续两个个低点没有碰到段前面一高低点
-                try:
-                    if bi['date'] < last_xd['date'] and \
-                            bi_list[index - 1]['value'] < bi3['value'] and \
-                            bi_list[index]['value'] < xd['value']:
-                        return False
-                except Exception as err:
-                    util_log_info('Last xd {}:{}'.format(last_xd['date'], err))
-
-                while bi['date'] > last_xd['date']:
-                    if xd['value'] > bi['value']:
-                        xd = bi
-                    index = index - 2
-                    bi = bi_list[index]
-                xd_list.append(xd)
-                return True
-    return False
 
 
-def update_zs(xd_list: XdList):
-    """
-    {
-          'zs_start': 进入段的起点
-          'zs_end':  离开段的终点
-          'ZG': 中枢高点,
-          'ZD': 中枢低点,
-          'GG': 中枢最低点,
-          'DD': 中枢最高点，
-          'bi_list': list[dict]
-          'location': 中枢位置
-      }
-    """
-    zs_list = xd_list.zs_list
 
-    if len(zs_list) < 1:
-        assert len(xd_list) < 4
-        zg = xd_list[0] if xd_list[0]['fx_mark'] == 'g' else xd_list[1]
-        zd = xd_list[0] if xd_list[0]['fx_mark'] == 'd' else xd_list[1]
-        zs = {
-            'ZG': zg,
-            'ZD': zd,
-            'GG': [zg],  # 初始用list储存，记录高低点的变化过程，中枢完成时可能会回退
-            'DD': [zd],  # 根据最高最低点的变化过程可以识别时扩散，收敛，向上还是向下的形态
-            'bi_list': xd_list[:2],
-            'location': 0  # 初始状态为0，说明没有方向， -1 表明下降第1割中枢， +2 表明上升第2个中枢
-        }
-        zs_list.append(zs)
-        return False
 
-    # 确定性的笔参与中枢构建
-    last_zs = zs_list[-1]
-    bi = xd_list[-2]
-
-    if last_zs['bi_list'][-1]['date'] == bi['date']:
-        # 已经计算过中枢
-        return False
-
-    if bi['fx_mark'] == 'g':
-        # 三卖 ,滞后，实际出现了一买信号
-        if bi['value'] < last_zs['ZD']['value']:
-            zs_end = last_zs['bi_list'].pop(-1)
-            last_zs.update(
-                zs_end=zs_end,
-                DD=last_zs['DD'].pop(-1) if zs_end['date'] == last_zs['DD'][-1]['date'] else last_zs['DD']
-            )
-
-            zs = {
-                'zs_start': xd_list[-4],
-                'ZG': bi,
-                'ZD': zs_end,
-                'GG': [bi],
-                'DD': [zs_end],
-                'bi_list': [zs_end, bi],
-                'location': -1 if last_zs['location'] >= 0 else last_zs['location'] - 1
-            }
-            zs_list.append(zs)
-            return True
-        elif bi['value'] < last_zs['ZG']['value']:
-            last_zs.update(ZG=bi)
-        # 有可能成为离开段
-        elif bi['value'] > last_zs['GG'][-1]['value']:
-            last_zs['GG'].append(bi)
-    elif bi['fx_mark'] == 'd':
-        # 三买，滞后，实际出现了一卖信号
-        if bi['value'] > last_zs['ZG']['value']:
-            zs_end = last_zs['bi_list'].pop(-1)
-            last_zs.update(
-                zs_end=zs_end,
-                GG=last_zs['GG'].pop(-1) if zs_end['date'] == last_zs['GG'][-1]['date'] else last_zs['GG']
-            )
-            zs = {
-                'zs_start': xd_list[-4],
-                'ZG': zs_end,
-                'ZD': bi,
-                'GG': [zs_end],
-                'DD': [bi],
-                'bi_list': [zs_end, bi],
-                'location': 1 if last_zs['location'] <= 0 else last_zs['location'] - 1
-            }
-            zs_list.append(zs)
-            return True
-        elif bi['value'] > last_zs['ZD']['value']:
-            last_zs.update(ZD=bi)
-        # 有可能成为离开段
-        elif bi['value'] < last_zs['DD'][-1]['value']:
-            last_zs['DD'].append(bi)
-    else:
-        raise ValueError
-    last_zs['bi_list'].append(bi)
-
-    return False
 
 
 class CzscBase:
@@ -665,9 +670,9 @@ class CzscBase:
         result = True
         while result:
 
-            update_zs(xd_list=xd_list)
+            xd_list.update_zs()
 
-            result = update_xd(xd_list=xd_list, trade_date=self._trade_date)
+            result = xd_list.update_xd(trade_date=self._trade_date)
 
             xd_list = xd_list.next
 
