@@ -99,6 +99,7 @@ def identify_direction(v1, v2):
 
 def update_fx(bars, new_bars: list, fx_list: list, trade_date: list):
     """更新分型序列
+    k线中有direction，fx中没有direction字段
         分型记对象样例：
          {
              'date': Timestamp('2020-11-26 00:00:00'),
@@ -106,7 +107,6 @@ def update_fx(bars, new_bars: list, fx_list: list, trade_date: list):
               'value': 138.0,
               'fx_start': Timestamp('2020-11-25 00:00:00'),
               'fx_end': Timestamp('2020-11-27 00:00:00'),
-              'direction': >=1, 趋势持续的K线根数
           }
          {
              'date': Timestamp('2020-11-26 00:00:00'),
@@ -114,7 +114,6 @@ def update_fx(bars, new_bars: list, fx_list: list, trade_date: list):
               'value': 150.67,
               'fx_start': Timestamp('2020-11-25 00:00:00'),
               'fx_end': Timestamp('2020-11-27 00:00:00'),
-              'direction': <=-1,
           }
         """
     assert len(bars) > 0
@@ -318,7 +317,7 @@ class XdList(object):
         last_xd = self.xd_list[-2]
         xd.update(pct_change=(xd['value'] - last_xd['value']) / last_xd['value'])
         kn = trade_date.index(xd['date']) - trade_date.index(last_xd['date']) + 1
-        xd.update(kn=kn)
+        xd.update(fx_mark=kn*np.sign(xd.get('fx_mark', xd.get('direction', 0))))
 
     def update_xd(self, trade_date: list):
         """更新笔分型序列
@@ -373,7 +372,7 @@ class XdList(object):
         xd2 = xd_list[-2]
 
         # 非分型结尾段，直接替换成分型, 没有新增段，后续不需要处理，同一个端点确认
-        if 'fx_mark' not in last_xd or xd['date'] == last_xd['date']:
+        if 'direction' in last_xd or xd['date'] == last_xd['date']:
             xd_list[-1] = xd  # 日期相等的情况是否已经在内存中修改过了？
             self.update_xd_eigenvalue(trade_date)
             return True
@@ -461,7 +460,6 @@ def update_bi(new_bars: list, fx_list: list, bi_list: XdList, trade_date: list):
           'value': 138.0,
           'fx_start': Timestamp('2020-11-25 00:00:00'),
           'fx_end': Timestamp('2020-11-27 00:00:00'),
-          'direction': 1
       }
 
      {
@@ -471,7 +469,6 @@ def update_bi(new_bars: list, fx_list: list, bi_list: XdList, trade_date: list):
           'value': 150.67,
           'fx_start': Timestamp('2020-11-25 00:00:00'),
           'fx_end': Timestamp('2020-11-27 00:00:00'),
-          'direction': -1
       }
 
       return: True 笔的数据出现更新，包括新增笔或者笔的延续
@@ -502,7 +499,7 @@ def update_bi(new_bars: list, fx_list: list, bi_list: XdList, trade_date: list):
 
     # k 线确认模式，当前K线的日期比分型K线靠后，说明进来的数据时K线
     if bar['date'] > bi['fx_end']:
-        if 'fx_mark' in last_bi:  # bi的结尾时分型
+        if 'direction' not in last_bi:  # bi的结尾时分型
             # 趋势延续替代,首先确认是否延续
             if (last_bi['fx_mark'] < 0 and bar['high'] > last_bi['value']) \
                     or (last_bi['fx_mark'] > 0 and bar['low'] < last_bi['value']):
@@ -510,7 +507,10 @@ def update_bi(new_bars: list, fx_list: list, bi_list: XdList, trade_date: list):
                 bi_list.update_xd_eigenvalue(trade_date)
                 return True
 
-            kn_inside = trade_date.index(bar['date']) - trade_date.index(last_bi['fx_end']) - 1
+            try:
+                kn_inside = trade_date.index(bar['date']) - trade_date.index(last_bi['fx_end']) - 1
+            except:
+                print('error')
 
             # 必须被和笔方向相同趋势的k线代替，相反方向的会形成分型，由分型处理
             if kn_inside > 2 and bar['direction'] * last_bi['fx_mark'] > 0:  # 两个分型间至少有1根k线，端点有可能不是高低点
@@ -536,7 +536,7 @@ def update_bi(new_bars: list, fx_list: list, bi_list: XdList, trade_date: list):
             return True
 
     # 非分型结尾笔，直接替换成分型, 没有新增笔，后续不需要处理，同一个端点确认
-    if 'fx_mark' not in last_bi or bi['date'] == last_bi['date']:
+    if 'direction' in last_bi or bi['date'] == last_bi['date']:
         bi_list[-1] = bi
         bi_list.update_xd_eigenvalue(trade_date)
         return True
