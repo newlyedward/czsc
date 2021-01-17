@@ -154,7 +154,7 @@ def update_fx(bars, new_bars: list, fx_list: list, trade_date: list):
                     "date": last_bar['date'],
                     "fx_mark": 1,
                     "value": last_bar['high'],
-                    "fx_start": new_bars[-2]['date'],  # 记录分型的开始和结束时间
+                    "fx_start": new_bars[-3]['date'],  # 记录分型的开始和结束时间
                     "fx_end": bar['date'],
                     # "direction": bar['direction'],
                 }
@@ -163,7 +163,7 @@ def update_fx(bars, new_bars: list, fx_list: list, trade_date: list):
                     "date": last_bar['date'],
                     "fx_mark": -1,
                     "value": last_bar['low'],
-                    "fx_start": new_bars[-2]['date'],  # 记录分型的开始和结束时间
+                    "fx_start": new_bars[-3]['date'],  # 记录分型的开始和结束时间
                     "fx_end": bar['date'],
                     # "direction": bar['direction'],
                 }
@@ -314,11 +314,13 @@ class XdList(object):
         return False
 
     def update_xd_eigenvalue(self, trade_date: list):
+        if self.prev:
+            print('upgrade')
         xd = self.xd_list[-1]
         last_xd = self.xd_list[-2]
         xd.update(pct_change=(xd['value'] - last_xd['value']) / last_xd['value'])
         kn = trade_date.index(xd['date']) - trade_date.index(last_xd['date']) + 1
-        xd.update(fx_mark=kn * np.sign(xd.get('fx_mark', xd.get('direction', 0))))
+        xd.update(fx_mark=kn * np.sign(xd.get('fx_mark', -xd.get('direction', 0))))
 
     def update_xd(self, trade_date: list):
         """更新笔分型序列
@@ -496,7 +498,7 @@ def update_bi(new_bars: list, fx_list: list, bi_list: XdList, trade_date: list):
 
     # k 线确认模式，当前K线的日期比分型K线靠后，说明进来的数据时K线
     if bar['date'] > bi['fx_end']:
-        if 'direction' not in last_bi:  # bi的结尾时分型
+        if 'direction' not in last_bi:  # bi的结尾是分型
             # 趋势延续替代,首先确认是否延续
             if (last_bi['fx_mark'] > 0 and bar['high'] > last_bi['value']) \
                     or (last_bi['fx_mark'] < 0 and bar['low'] < last_bi['value']):
