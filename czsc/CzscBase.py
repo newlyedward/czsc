@@ -152,20 +152,20 @@ def update_fx(bars, new_bars: list, fx_list: list, trade_date: list):
             if direction < 0:
                 fx = {
                     "date": last_bar['date'],
-                    "fx_mark": "g",
+                    "fx_mark": -1,
                     "value": last_bar['high'],
                     "fx_start": new_bars[-2]['date'],  # 记录分型的开始和结束时间
                     "fx_end": bar['date'],
-                    "direction": bar['direction'],
+                    # "direction": bar['direction'],
                 }
             else:
                 fx = {
                     "date": last_bar['date'],
-                    "fx_mark": "d",
+                    "fx_mark": 1,
                     "value": last_bar['low'],
                     "fx_start": new_bars[-2]['date'],  # 记录分型的开始和结束时间
                     "fx_end": bar['date'],
-                    "direction": bar['direction'],
+                    # "direction": bar['direction'],
                 }
             fx_list.append(fx)
             return True
@@ -258,7 +258,7 @@ class XdList(object):
             # 已经计算过中枢
             return False
 
-        if bi['fx_mark'] == 'g':
+        if bi['fx_mark'] < 0:
             # 三卖 ,滞后，实际出现了一买信号
             if bi['value'] < last_zs['ZD']['value']:
                 zs_end = last_zs['bi_list'].pop(-1)
@@ -283,7 +283,7 @@ class XdList(object):
             # 有可能成为离开段
             elif bi['value'] > last_zs['GG'][-1]['value']:
                 last_zs['GG'].append(bi)
-        elif bi['fx_mark'] == 'd':
+        elif bi['fx_mark'] > 0:
             # 三买，滞后，实际出现了一卖信号
             if bi['value'] > last_zs['ZG']['value']:
                 zs_end = last_zs['bi_list'].pop(-1)
@@ -329,7 +329,7 @@ class XdList(object):
               'value': 138.0,
               'fx_start': Timestamp('2020-11-25 00:00:00'),
               'fx_end': Timestamp('2020-11-27 00:00:00'),
-              'direction': 'up',
+              'direction': >=1,
               'fx_power': 'weak'
           }
 
@@ -380,14 +380,14 @@ class XdList(object):
 
         assert xd['date'] > last_xd['date']
 
-        if bi3['fx_mark'] == 'g':
+        if bi3['fx_mark'] < 0:
             # 同向延续
-            if last_xd['fx_mark'] == 'g' and xd['value'] > last_xd['value']:
+            if last_xd['fx_mark'] < 0 and xd['value'] > last_xd['value']:
                 xd_list[-1] = xd
                 self.update_xd_eigenvalue(trade_date)
                 return True
             # 反向判断
-            elif last_xd['fx_mark'] == 'd':
+            elif last_xd['fx_mark'] > 0:
                 # 价格判断
                 if xd['value'] > xd2['value']:
                     xd_list.append(xd)
@@ -414,14 +414,14 @@ class XdList(object):
                     xd_list.append(xd)
                     self.update_xd_eigenvalue(trade_date)
                     return True
-        elif bi3['fx_mark'] == 'd':
+        elif bi3['fx_mark'] > 0:
             # 同向延续
-            if last_xd['fx_mark'] == 'd' and xd['value'] < last_xd['value']:
+            if last_xd['fx_mark'] > 0 and xd['value'] < last_xd['value']:
                 xd_list[-1] = xd
                 self.update_xd_eigenvalue(trade_date)
                 return True
             # 反向判断
-            elif last_xd['fx_mark'] == 'g':
+            elif last_xd['fx_mark'] < 0:
                 # 价格判断
                 if xd['value'] < xd2['value']:
                     xd_list.append(xd)
@@ -504,8 +504,8 @@ def update_bi(new_bars: list, fx_list: list, bi_list: XdList, trade_date: list):
     if bar['date'] > bi['fx_end']:
         if 'fx_mark' in last_bi:  # bi的结尾时分型
             # 趋势延续替代,首先确认是否延续
-            if (last_bi['fx_mark'] == 'g' and bar['high'] > last_bi['value']) \
-                    or (last_bi['fx_mark'] == 'd' and bar['low'] < last_bi['value']):
+            if (last_bi['fx_mark'] < 0 and bar['high'] > last_bi['value']) \
+                    or (last_bi['fx_mark'] > 0 and bar['low'] < last_bi['value']):
                 bi_list[-1] = bar
                 bi_list.update_xd_eigenvalue(trade_date)
                 return True
@@ -513,7 +513,7 @@ def update_bi(new_bars: list, fx_list: list, bi_list: XdList, trade_date: list):
             kn_inside = trade_date.index(bar['date']) - trade_date.index(last_bi['fx_end']) - 1
 
             # 必须被和笔方向相同趋势的k线代替，相反方向的会形成分型，由分型处理
-            if kn_inside > 2 and bar['direction'] * last_bi['direction'] > 0:  # 两个分型间至少有1根k线，端点有可能不是高低点
+            if kn_inside > 2 and bar['direction'] * last_bi['fx_mark'] > 0:  # 两个分型间至少有1根k线，端点有可能不是高低点
                 bi_list.append(bar)
                 bi_list.update_xd_eigenvalue(trade_date)
                 return True
@@ -523,8 +523,8 @@ def update_bi(new_bars: list, fx_list: list, bi_list: XdList, trade_date: list):
                 return False
 
             # 价格确认
-            if (last_bi['fx_mark'] == 'd' and bar['high'] > bi_list[-2]['value']) \
-                    or (last_bi['fx_mark'] == 'g' and bar['low'] < bi_list[-2]['value']):
+            if (last_bi['fx_mark'] > 0 and bar['high'] > bi_list[-2]['value']) \
+                    or (last_bi['fx_mark'] < 0 and bar['low'] < bi_list[-2]['value']):
                 bi_list.append(bar)
                 bi_list.update_xd_eigenvalue(trade_date)
                 return True
@@ -542,9 +542,9 @@ def update_bi(new_bars: list, fx_list: list, bi_list: XdList, trade_date: list):
         return True
 
     # 分型处理，连续高低点处理，只判断是否后移,没有增加笔，不需要处理
-    if last_bi['fx_mark'] == bi['fx_mark']:
-        if (last_bi['fx_mark'] == 'g' and last_bi['value'] < bi['value']) \
-                or (last_bi['fx_mark'] == 'd' and last_bi['value'] > bi['value']):
+    if last_bi['fx_mark'] * bi['fx_mark'] > 0:
+        if (last_bi['fx_mark'] < 0 and last_bi['value'] < bi['value']) \
+                or (last_bi['fx_mark'] > 0 and last_bi['value'] > bi['value']):
             bi_list[-1] = bi
             bi_list.update_xd_eigenvalue(trade_date)
             return True
@@ -559,9 +559,9 @@ def update_bi(new_bars: list, fx_list: list, bi_list: XdList, trade_date: list):
                 # if bi['fx_mark'] == self._fx_list[index]['fx_mark']:
                 #     if bi['fx_mark'] == 'd' and bi['value'] > self._fx_list[index]['value']:
 
-                if (bi['fx_mark'] == 'd' and 'd' == fx_list[index]['fx_mark']
+                if (bi['fx_mark'] > 0 and 0 < fx_list[index]['fx_mark']
                     and bi['value'] > fx_list[index]['value']) \
-                        or (bi['fx_mark'] == 'g' and 'g' == fx_list[index]['fx_mark']
+                        or (bi['fx_mark'] < 0 and 0 > fx_list[index]['fx_mark']
                             and bi['value'] < fx_list[index]['value']):
                     bi = fx_list[index].copy()
                     # 分型结尾不变
@@ -578,8 +578,8 @@ def update_bi(new_bars: list, fx_list: list, bi_list: XdList, trade_date: list):
             return False
 
         # 价格确认
-        if (bi['fx_mark'] == 'g' and bi['value'] > bi_list[-2]['value']) \
-                or (bi['fx_mark'] == 'd' and bi['value'] < bi_list[-2]['value']):
+        if (bi['fx_mark'] < 0 and bi['value'] > bi_list[-2]['value']) \
+                or (bi['fx_mark'] > 0 and bi['value'] < bi_list[-2]['value']):
             bi_list.append(bi)
             bi_list.update_xd_eigenvalue(trade_date)
             return True
