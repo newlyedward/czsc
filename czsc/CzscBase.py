@@ -39,6 +39,7 @@ from czsc.ClEngine.ClThread import ClThread
 from czsc.Utils.echarts_plot import kline_pro
 from czsc.Utils.logs import util_log_info
 from czsc.Utils.trade_date import util_get_next_day, util_get_trade_gap
+from czsc.Utils.transformer import DataEncoder
 
 
 class ClSimBar(ClThread):
@@ -90,7 +91,7 @@ class ClSimBar(ClThread):
 
 
 def identify_direction(v1, v2):
-    if v1 > v2:  # 前面几根可能都是包含，这里直接初始赋值-1
+    if v1 > v2:  # 前面几根可能都是包含，这里直接初始赋值-1，上升趋势为正数
         direction = 1
     else:
         direction = -1
@@ -103,14 +104,14 @@ def update_fx(bars, new_bars: list, fx_list: list, trade_date: list):
         分型记对象样例：
          {
              'date': Timestamp('2020-11-26 00:00:00'),
-              'fx_mark': 'd',
+              'fx_mark': -8, 低点用负数表示，绝对值表示K线根数
               'value': 138.0,
               'fx_start': Timestamp('2020-11-25 00:00:00'),
               'fx_end': Timestamp('2020-11-27 00:00:00'),
           }
          {
              'date': Timestamp('2020-11-26 00:00:00'),
-              'fx_mark': 'g',
+              'fx_mark': +9, 高点用正数表示，绝对值表示K线根数
               'value': 150.67,
               'fx_start': Timestamp('2020-11-25 00:00:00'),
               'fx_end': Timestamp('2020-11-27 00:00:00'),
@@ -151,7 +152,7 @@ def update_fx(bars, new_bars: list, fx_list: list, trade_date: list):
             if direction < 0:
                 fx = {
                     "date": last_bar['date'],
-                    "fx_mark": -1,
+                    "fx_mark": 1,
                     "value": last_bar['high'],
                     "fx_start": new_bars[-2]['date'],  # 记录分型的开始和结束时间
                     "fx_end": bar['date'],
@@ -160,7 +161,7 @@ def update_fx(bars, new_bars: list, fx_list: list, trade_date: list):
             else:
                 fx = {
                     "date": last_bar['date'],
-                    "fx_mark": 1,
+                    "fx_mark": -1,
                     "value": last_bar['low'],
                     "fx_start": new_bars[-2]['date'],  # 记录分型的开始和结束时间
                     "fx_end": bar['date'],
@@ -236,8 +237,8 @@ class XdList(object):
 
         if len(zs_list) < 1:
             assert len(xd_list) < 4
-            zg = xd_list[0] if xd_list[0]['fx_mark'] == 'g' else xd_list[1]
-            zd = xd_list[0] if xd_list[0]['fx_mark'] == 'd' else xd_list[1]
+            zg = xd_list[0] if xd_list[0]['fx_mark'] < 0 else xd_list[1]
+            zd = xd_list[0] if xd_list[0]['fx_mark'] > 0 else xd_list[1]
             zs = {
                 'ZG': zg,
                 'ZD': zd,
@@ -257,7 +258,7 @@ class XdList(object):
             # 已经计算过中枢
             return False
 
-        if bi['fx_mark'] < 0:
+        if bi['fx_mark'] > 0:
             # 三卖 ,滞后，实际出现了一买信号
             if bi['value'] < last_zs['ZD']['value']:
                 zs_end = last_zs['bi_list'].pop(-1)
@@ -282,7 +283,7 @@ class XdList(object):
             # 有可能成为离开段
             elif bi['value'] > last_zs['GG'][-1]['value']:
                 last_zs['GG'].append(bi)
-        elif bi['fx_mark'] > 0:
+        elif bi['fx_mark'] < 0:
             # 三买，滞后，实际出现了一卖信号
             if bi['value'] > last_zs['ZG']['value']:
                 zs_end = last_zs['bi_list'].pop(-1)
@@ -317,29 +318,25 @@ class XdList(object):
         last_xd = self.xd_list[-2]
         xd.update(pct_change=(xd['value'] - last_xd['value']) / last_xd['value'])
         kn = trade_date.index(xd['date']) - trade_date.index(last_xd['date']) + 1
-        xd.update(fx_mark=kn*np.sign(xd.get('fx_mark', xd.get('direction', 0))))
+        xd.update(fx_mark=kn * np.sign(xd.get('fx_mark', xd.get('direction', 0))))
 
     def update_xd(self, trade_date: list):
         """更新笔分型序列
         分型记对象样例：
          {
              'date': Timestamp('2020-11-26 00:00:00'),
-              'fx_mark': 'd',
+              'fx_mark': -8,  低点，负数，表示下降趋势持续的K线根数
               'value': 138.0,
               'fx_start': Timestamp('2020-11-25 00:00:00'),
               'fx_end': Timestamp('2020-11-27 00:00:00'),
-              'direction': >=1,
-              'fx_power': 'weak'
           }
 
          {
              'date': Timestamp('2020-11-26 00:00:00'),
-              'fx_mark': 'g',
+              'fx_mark': 7, 高点， 正数，表示上升趋势持续的根数
               'value': 150.67,
               'fx_start': Timestamp('2020-11-25 00:00:00'),
               'fx_end': Timestamp('2020-11-27 00:00:00'),
-              'direction': 'down',
-              'fx_power': 'strong'
           }
         """
         # 至少3根同类型分型才可能出现线段，最后1根bi不确定，因此最后一段也不确定
@@ -379,14 +376,14 @@ class XdList(object):
 
         assert xd['date'] > last_xd['date']
 
-        if bi3['fx_mark'] < 0:
+        if bi3['fx_mark'] > 0:
             # 同向延续
-            if last_xd['fx_mark'] < 0 and xd['value'] > last_xd['value']:
+            if last_xd['fx_mark'] > 0 and xd['value'] > last_xd['value']:
                 xd_list[-1] = xd
                 self.update_xd_eigenvalue(trade_date)
                 return True
             # 反向判断
-            elif last_xd['fx_mark'] > 0:
+            elif last_xd['fx_mark'] < 0:
                 # 价格判断
                 if xd['value'] > xd2['value']:
                     xd_list.append(xd)
@@ -413,14 +410,14 @@ class XdList(object):
                     xd_list.append(xd)
                     self.update_xd_eigenvalue(trade_date)
                     return True
-        elif bi3['fx_mark'] > 0:
+        elif bi3['fx_mark'] < 0:
             # 同向延续
-            if last_xd['fx_mark'] > 0 and xd['value'] < last_xd['value']:
+            if last_xd['fx_mark'] < 0 and xd['value'] < last_xd['value']:
                 xd_list[-1] = xd
                 self.update_xd_eigenvalue(trade_date)
                 return True
             # 反向判断
-            elif last_xd['fx_mark'] < 0:
+            elif last_xd['fx_mark'] > 0:
                 # 价格判断
                 if xd['value'] < xd2['value']:
                     xd_list.append(xd)
@@ -501,8 +498,8 @@ def update_bi(new_bars: list, fx_list: list, bi_list: XdList, trade_date: list):
     if bar['date'] > bi['fx_end']:
         if 'direction' not in last_bi:  # bi的结尾时分型
             # 趋势延续替代,首先确认是否延续
-            if (last_bi['fx_mark'] < 0 and bar['high'] > last_bi['value']) \
-                    or (last_bi['fx_mark'] > 0 and bar['low'] < last_bi['value']):
+            if (last_bi['fx_mark'] > 0 and bar['high'] > last_bi['value']) \
+                    or (last_bi['fx_mark'] < 0 and bar['low'] < last_bi['value']):
                 bi_list[-1] = bar
                 bi_list.update_xd_eigenvalue(trade_date)
                 return True
@@ -513,7 +510,7 @@ def update_bi(new_bars: list, fx_list: list, bi_list: XdList, trade_date: list):
                 print('error')
 
             # 必须被和笔方向相同趋势的k线代替，相反方向的会形成分型，由分型处理
-            if kn_inside > 2 and bar['direction'] * last_bi['fx_mark'] > 0:  # 两个分型间至少有1根k线，端点有可能不是高低点
+            if kn_inside > 2 and bar['direction'] * last_bi['fx_mark'] < 0:  # 两个分型间至少有1根k线，端点有可能不是高低点
                 bi_list.append(bar)
                 bi_list.update_xd_eigenvalue(trade_date)
                 return True
@@ -523,8 +520,8 @@ def update_bi(new_bars: list, fx_list: list, bi_list: XdList, trade_date: list):
                 return False
 
             # 价格确认
-            if (last_bi['fx_mark'] > 0 and bar['high'] > bi_list[-2]['value']) \
-                    or (last_bi['fx_mark'] < 0 and bar['low'] < bi_list[-2]['value']):
+            if (last_bi['fx_mark'] < 0 and bar['high'] > bi_list[-2]['value']) \
+                    or (last_bi['fx_mark'] > 0 and bar['low'] < bi_list[-2]['value']):
                 bi_list.append(bar)
                 bi_list.update_xd_eigenvalue(trade_date)
                 return True
@@ -541,10 +538,10 @@ def update_bi(new_bars: list, fx_list: list, bi_list: XdList, trade_date: list):
         bi_list.update_xd_eigenvalue(trade_date)
         return True
 
-    # 分型处理，连续高低点处理，只判断是否后移,没有增加笔，不需要处理
+    # 分型处理，连续高低点处理，只判断是否后移,没有增加笔
     if last_bi['fx_mark'] * bi['fx_mark'] > 0:
-        if (last_bi['fx_mark'] < 0 and last_bi['value'] < bi['value']) \
-                or (last_bi['fx_mark'] > 0 and last_bi['value'] > bi['value']):
+        if (last_bi['fx_mark'] > 0 and last_bi['value'] < bi['value']) \
+                or (last_bi['fx_mark'] < 0 and last_bi['value'] > bi['value']):
             bi_list[-1] = bi
             bi_list.update_xd_eigenvalue(trade_date)
             return True
@@ -559,9 +556,9 @@ def update_bi(new_bars: list, fx_list: list, bi_list: XdList, trade_date: list):
                 # if bi['fx_mark'] == self._fx_list[index]['fx_mark']:
                 #     if bi['fx_mark'] == 'd' and bi['value'] > self._fx_list[index]['value']:
 
-                if (bi['fx_mark'] > 0 and 0 < fx_list[index]['fx_mark']
+                if (bi['fx_mark'] < 0 and 0 > fx_list[index]['fx_mark']
                     and bi['value'] > fx_list[index]['value']) \
-                        or (bi['fx_mark'] < 0 and 0 > fx_list[index]['fx_mark']
+                        or (bi['fx_mark'] > 0 and 0 < fx_list[index]['fx_mark']
                             and bi['value'] < fx_list[index]['value']):
                     bi = fx_list[index].copy()
                     # 分型结尾不变
@@ -578,8 +575,8 @@ def update_bi(new_bars: list, fx_list: list, bi_list: XdList, trade_date: list):
             return False
 
         # 价格确认
-        if (bi['fx_mark'] < 0 and bi['value'] > bi_list[-2]['value']) \
-                or (bi['fx_mark'] > 0 and bi['value'] < bi_list[-2]['value']):
+        if (bi['fx_mark'] > 0 and bi['value'] > bi_list[-2]['value']) \
+                or (bi['fx_mark'] < 0 and bi['value'] < bi_list[-2]['value']):
             bi_list.append(bi)
             bi_list.update_xd_eigenvalue(trade_date)
             return True
@@ -706,8 +703,8 @@ class CzscMongo(CzscBase):
         chart = kline_pro(
             kline=self._bars, fx=self._fx_list,
             bs=self._sig_list, xd=self._xd_list,
-            # title=self.code, width='1440px', height='580px'
-            title=self.code, width='2540px', height='850px'
+            title=self.code, width='1520px', height='580px'
+            # title=self.code, width='2540px', height='850px'
         )
 
         if not chart_path:
@@ -758,6 +755,18 @@ class CzscMongo(CzscBase):
             collection.insert_many(bi_list)
         except Exception as error:
             print(error)
+
+    def to_json(self):
+        xd = self._xd_list
+        index = 0
+        data = []
+        while xd:
+            data.append({'xd{}'.format(index): xd.xd_list, 'zs{}'.format(index): xd.zs_list})
+            xd = xd.next
+            index = index + 1
+
+        with open("{}.json".format(self.code), "w") as write_file:
+            json.dump(data, write_file, indent=4, sort_keys=True, cls=DataEncoder)
 
 
 class ClConsumer(ClThread):
@@ -1102,6 +1111,7 @@ def main_mongo():
     czsc_mongo = CzscMongo(code='rul8', freq='day', exchange='dce')
     czsc_mongo.run()
     czsc_mongo.draw()
+    czsc_mongo.to_json()
 
 
 if __name__ == '__main__':
