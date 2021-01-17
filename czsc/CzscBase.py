@@ -362,7 +362,7 @@ class XdList(object):
                 xd_list.append(bi_list[-1])
                 xd_list.append(bi_list[0])
 
-            self.update_xd_eigenvalue(trade_date)
+            xd_list.update_xd_eigenvalue(trade_date)
             return True
 
         bi3 = bi_list[-3]
@@ -373,7 +373,7 @@ class XdList(object):
         # 非分型结尾段，直接替换成分型, 没有新增段，后续不需要处理，同一个端点确认
         if 'direction' in last_xd or xd['date'] == last_xd['date']:
             xd_list[-1] = xd  # 日期相等的情况是否已经在内存中修改过了？
-            self.update_xd_eigenvalue(trade_date)
+            xd_list.update_xd_eigenvalue(trade_date)
             return True
 
         assert xd['date'] > last_xd['date']
@@ -382,14 +382,14 @@ class XdList(object):
             # 同向延续
             if last_xd['fx_mark'] > 0 and xd['value'] > last_xd['value']:
                 xd_list[-1] = xd
-                self.update_xd_eigenvalue(trade_date)
+                xd_list.update_xd_eigenvalue(trade_date)
                 return True
             # 反向判断
             elif last_xd['fx_mark'] < 0:
                 # 价格判断
                 if xd['value'] > xd2['value']:
                     xd_list.append(xd)
-                    self.update_xd_eigenvalue(trade_date)
+                    xd_list.update_xd_eigenvalue(trade_date)
                     return True
                 # 出现三笔破坏线段，连续两笔，一笔比一笔高,寻找段之间的最高点
                 elif bi3['date'] > last_xd['date'] and xd['value'] > bi3['value']:
@@ -410,20 +410,20 @@ class XdList(object):
                         index = index - 2
                         bi = bi_list[index]
                     xd_list.append(xd)
-                    self.update_xd_eigenvalue(trade_date)
+                    xd_list.update_xd_eigenvalue(trade_date)
                     return True
         elif bi3['fx_mark'] < 0:
             # 同向延续
             if last_xd['fx_mark'] < 0 and xd['value'] < last_xd['value']:
                 xd_list[-1] = xd
-                self.update_xd_eigenvalue(trade_date)
+                xd_list.update_xd_eigenvalue(trade_date)
                 return True
             # 反向判断
             elif last_xd['fx_mark'] > 0:
                 # 价格判断
                 if xd['value'] < xd2['value']:
                     xd_list.append(xd)
-                    self.update_xd_eigenvalue(trade_date)
+                    xd_list.update_xd_eigenvalue(trade_date)
                     return True
                 # 出现三笔破坏线段，连续两笔，一笔比一笔低,将最低的一笔作为段的起点，避免出现最低点不是端点的问题
                 elif bi3['date'] > last_xd['date'] and xd['value'] < bi3['value']:
@@ -444,7 +444,7 @@ class XdList(object):
                         index = index - 2
                         bi = bi_list[index]
                     xd_list.append(xd)
-                    self.update_xd_eigenvalue(trade_date)
+                    xd_list.update_xd_eigenvalue(trade_date)
                     return True
         return False
 
@@ -671,8 +671,9 @@ class CzscBase:
             xd_list.update_zs()
 
             result = xd_list.update_xd(trade_date=self._trade_date)
-
+            temp_list = xd_list
             xd_list = xd_list.next
+            xd_list.prev = temp_list
 
     #  必须实现,每次输入一个行情数据，然后调用update看是否需要更新
     def on_bar(self, bar):
