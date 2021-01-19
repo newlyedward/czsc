@@ -237,8 +237,8 @@ class XdList(object):
 
         if len(zs_list) < 1:
             assert len(xd_list) < 4
-            zg = xd_list[0] if xd_list[0]['fx_mark'] < 0 else xd_list[1]
-            zd = xd_list[0] if xd_list[0]['fx_mark'] > 0 else xd_list[1]
+            zg = xd_list[0] if xd_list[0]['fx_mark'] > 0 else xd_list[1]
+            zd = xd_list[0] if xd_list[0]['fx_mark'] < 0 else xd_list[1]
             zs = {
                 'ZG': zg,
                 'ZD': zd,
@@ -268,7 +268,7 @@ class XdList(object):
                 )
 
                 zs = {
-                    'zs_start': xd_list[-4],
+                    'zs_start': xd_list[-3],
                     'ZG': bi,
                     'ZD': zs_end,
                     'GG': [bi],
@@ -292,13 +292,13 @@ class XdList(object):
                     GG=last_zs['GG'].pop(-1) if zs_end['date'] == last_zs['GG'][-1]['date'] else last_zs['GG']
                 )
                 zs = {
-                    'zs_start': xd_list[-4],
+                    'zs_start': xd_list[-3],
                     'ZG': zs_end,
                     'ZD': bi,
                     'GG': [zs_end],
                     'DD': [bi],
                     'bi_list': [zs_end, bi],
-                    'location': 1 if last_zs['location'] <= 0 else last_zs['location'] - 1
+                    'location': 1 if last_zs['location'] <= 0 else last_zs['location'] + 1
                 }
                 zs_list.append(zs)
                 return True
@@ -314,8 +314,6 @@ class XdList(object):
         return False
 
     def update_xd_eigenvalue(self, trade_date: list):
-        if self.prev:
-            print('upgrade')
         xd = self.xd_list[-1]
         last_xd = self.xd_list[-2]
         xd.update(pct_change=(xd['value'] - last_xd['value']) / last_xd['value'])
@@ -1111,7 +1109,7 @@ def main_consumer():
 
 
 def main_mongo():
-    czsc_mongo = CzscMongo(code='rul8', freq='day', exchange='dce')
+    czsc_mongo = CzscMongo(code='603058', freq='day', exchange='dce')
     czsc_mongo.run()
     czsc_mongo.draw()
     czsc_mongo.to_json()
