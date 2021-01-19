@@ -228,7 +228,7 @@ class XdList(object):
               'ZD': 中枢低点,
               'GG': 中枢最低点,
               'DD': 中枢最高点，
-              'bi_list': list[dict]
+              'xd_list': list[dict]
               'location': 中枢位置
           }
         """
@@ -244,7 +244,7 @@ class XdList(object):
                 'ZD': zd,
                 'GG': [zg],  # 初始用list储存，记录高低点的变化过程，中枢完成时可能会回退
                 'DD': [zd],  # 根据最高最低点的变化过程可以识别时扩散，收敛，向上还是向下的形态
-                'bi_list': xd_list[:2],
+                'xd_list': xd_list[:2],
                 'location': 0  # 初始状态为0，说明没有方向， -1 表明下降第1割中枢， +2 表明上升第2个中枢
             }
             zs_list.append(zs)
@@ -252,16 +252,16 @@ class XdList(object):
 
         # 确定性的笔参与中枢构建
         last_zs = zs_list[-1]
-        bi = xd_list[-2]
+        xd = xd_list[-2]
 
-        if last_zs['bi_list'][-1]['date'] == bi['date']:
+        if last_zs['xd_list'][-1]['date'] == xd['date']:
             # 已经计算过中枢
             return False
 
-        if bi['fx_mark'] > 0:
+        if xd['fx_mark'] > 0:
             # 三卖 ,滞后，实际出现了一买信号
-            if bi['value'] < last_zs['ZD']['value']:
-                zs_end = last_zs['bi_list'].pop(-1)
+            if xd['value'] < last_zs['ZD']['value']:
+                zs_end = last_zs['xd_list'].pop(-1)
                 last_zs.update(
                     zs_end=zs_end,
                     DD=last_zs['DD'].pop(-1) if zs_end['date'] == last_zs['DD'][-1]['date'] else last_zs['DD']
@@ -269,24 +269,24 @@ class XdList(object):
 
                 zs = {
                     'zs_start': xd_list[-3],
-                    'ZG': bi,
+                    'ZG': xd,
                     'ZD': zs_end,
-                    'GG': [bi],
+                    'GG': [xd],
                     'DD': [zs_end],
-                    'bi_list': [zs_end, bi],
+                    'xd_list': [zs_end, xd],
                     'location': -1 if last_zs['location'] >= 0 else last_zs['location'] - 1
                 }
                 zs_list.append(zs)
                 return True
-            elif bi['value'] < last_zs['ZG']['value']:
-                last_zs.update(ZG=bi)
+            elif xd['value'] < last_zs['ZG']['value']:
+                last_zs.update(ZG=xd)
             # 有可能成为离开段
-            elif bi['value'] > last_zs['GG'][-1]['value']:
-                last_zs['GG'].append(bi)
-        elif bi['fx_mark'] < 0:
+            elif xd['value'] > last_zs['GG'][-1]['value']:
+                last_zs['GG'].append(xd)
+        elif xd['fx_mark'] < 0:
             # 三买，滞后，实际出现了一卖信号
-            if bi['value'] > last_zs['ZG']['value']:
-                zs_end = last_zs['bi_list'].pop(-1)
+            if xd['value'] > last_zs['ZG']['value']:
+                zs_end = last_zs['xd_list'].pop(-1)
                 last_zs.update(
                     zs_end=zs_end,
                     GG=last_zs['GG'].pop(-1) if zs_end['date'] == last_zs['GG'][-1]['date'] else last_zs['GG']
@@ -294,22 +294,22 @@ class XdList(object):
                 zs = {
                     'zs_start': xd_list[-3],
                     'ZG': zs_end,
-                    'ZD': bi,
+                    'ZD': xd,
                     'GG': [zs_end],
-                    'DD': [bi],
-                    'bi_list': [zs_end, bi],
+                    'DD': [xd],
+                    'xd_list': [zs_end, xd],
                     'location': 1 if last_zs['location'] <= 0 else last_zs['location'] + 1
                 }
                 zs_list.append(zs)
                 return True
-            elif bi['value'] > last_zs['ZD']['value']:
-                last_zs.update(ZD=bi)
+            elif xd['value'] > last_zs['ZD']['value']:
+                last_zs.update(ZD=xd)
             # 有可能成为离开段
-            elif bi['value'] < last_zs['DD'][-1]['value']:
-                last_zs['DD'].append(bi)
+            elif xd['value'] < last_zs['DD'][-1]['value']:
+                last_zs['DD'].append(xd)
         else:
             raise ValueError
-        last_zs['bi_list'].append(bi)
+        last_zs['xd_list'].append(xd)
 
         return False
 

@@ -198,7 +198,7 @@ def kline_pro(kline: List[dict],
             zs_color = zs_colors[index % len(zs_colors)]
             data = data + [opts.MarkAreaItem(
                 name='XD{}'.format(index),
-                x=(x['bi_list'][0]['date'], x['bi_list'][-1]['date']),
+                x=(x['xd_list'][0]['date'], x['xd_list'][-1]['date']),
                 y=(x['ZG']['value'], x['ZD']['value']),
                 label_opts=opts.LabelOpts(color=zs_color),
                 itemstyle_opts=opts.ItemStyleOpts(
