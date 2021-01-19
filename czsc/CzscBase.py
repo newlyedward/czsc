@@ -245,7 +245,9 @@ class XdList(object):
                 'GG': [zg],  # 初始用list储存，记录高低点的变化过程，中枢完成时可能会回退
                 'DD': [zd],  # 根据最高最低点的变化过程可以识别时扩散，收敛，向上还是向下的形态
                 'xd_list': xd_list[:2],
-                'location': 0  # 初始状态为0，说明没有方向， -1 表明下降第1割中枢， +2 表明上升第2个中枢
+                'weight': 1,    # 记录中枢中段的数量
+                'location': 0,  # 初始状态为0，说明没有方向， -1 表明下降第1割中枢， +2 表明上升第2个中枢
+                'real_loc': 0   # 除去只有一段的中枢
             }
             zs_list.append(zs)
             return False
@@ -264,7 +266,9 @@ class XdList(object):
                 zs_end = last_zs['xd_list'].pop(-1)
                 last_zs.update(
                     zs_end=zs_end,
-                    DD=last_zs['DD'].pop(-1) if zs_end['date'] == last_zs['DD'][-1]['date'] else last_zs['DD']
+                    weight=last_zs['weight'] - 1,
+                    DD=last_zs['DD'].pop(-1) if zs_end['date'] == last_zs['DD'][-1]['date'] else last_zs['DD'],
+                    real_loc=last_zs['real_loc'] + 1 if last_zs['weight'] == 2 else last_zs['real_loc']
                 )
 
                 zs = {
@@ -274,7 +278,9 @@ class XdList(object):
                     'GG': [xd],
                     'DD': [zs_end],
                     'xd_list': [zs_end, xd],
-                    'location': -1 if last_zs['location'] >= 0 else last_zs['location'] - 1
+                    'weight': 1,
+                    'location': -1 if last_zs['location'] >= 0 else last_zs['location'] - 1,
+                    'real_loc': -1 if last_zs['real_loc'] >= 0 else last_zs['real_loc'] - 1,
                 }
                 zs_list.append(zs)
                 return True
@@ -289,7 +295,9 @@ class XdList(object):
                 zs_end = last_zs['xd_list'].pop(-1)
                 last_zs.update(
                     zs_end=zs_end,
-                    GG=last_zs['GG'].pop(-1) if zs_end['date'] == last_zs['GG'][-1]['date'] else last_zs['GG']
+                    weight=last_zs['weight'] - 1,
+                    GG=last_zs['GG'].pop(-1) if zs_end['date'] == last_zs['GG'][-1]['date'] else last_zs['GG'],
+                    real_loc=last_zs['real_loc'] - 1 if last_zs['weight'] == 2 else last_zs['real_loc']
                 )
                 zs = {
                     'zs_start': xd_list[-3],
@@ -298,7 +306,9 @@ class XdList(object):
                     'GG': [zs_end],
                     'DD': [xd],
                     'xd_list': [zs_end, xd],
-                    'location': 1 if last_zs['location'] <= 0 else last_zs['location'] + 1
+                    'weight': 1,
+                    'location': 1 if last_zs['location'] <= 0 else last_zs['location'] + 1,
+                    'real_loc': 1 if last_zs['real_loc'] <= 0 else last_zs['real_loc'] + 1,
                 }
                 zs_list.append(zs)
                 return True
@@ -310,6 +320,7 @@ class XdList(object):
         else:
             raise ValueError
         last_zs['xd_list'].append(xd)
+        last_zs['weight'] = last_zs['weight'] + 1
 
         return False
 
@@ -1109,7 +1120,7 @@ def main_consumer():
 
 
 def main_mongo():
-    czsc_mongo = CzscMongo(code='603058', freq='day', exchange='dce')
+    czsc_mongo = CzscMongo(code='601012', freq='day', exchange='sse')
     czsc_mongo.run()
     czsc_mongo.draw()
     czsc_mongo.to_json()
