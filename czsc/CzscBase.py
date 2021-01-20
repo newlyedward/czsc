@@ -202,7 +202,7 @@ class XdList(object):
         self.xd_list = []  # 否则指向同一个地址
         # 低级别的中枢
         self.zs_list = []
-        self.sig = []
+        self.sig_list = []
         # next是低一级别的线段
         self.next = None
         # prev 指向高一级别的线段
@@ -246,9 +246,9 @@ class XdList(object):
                 'GG': [zg],  # 初始用list储存，记录高低点的变化过程，中枢完成时可能会回退
                 'DD': [zd],  # 根据最高最低点的变化过程可以识别时扩散，收敛，向上还是向下的形态
                 'xd_list': xd_list[:2],
-                'weight': 1,    # 记录中枢中段的数量
+                'weight': 1,  # 记录中枢中段的数量
                 'location': 0,  # 初始状态为0，说明没有方向， -1 表明下降第1割中枢， +2 表明上升第2个中枢
-                'real_loc': 0   # 除去只有一段的中枢
+                'real_loc': 0  # 除去只有一段的中枢
             }
             zs_list.append(zs)
             return False
@@ -464,8 +464,42 @@ class XdList(object):
         """
         zs = self.zs_list[-1]
         xd = self.xd_list[-1]
+        sig = {
+            'date': trade_date[-1],
+            'real_loc': zs['real_loc'],
+            'location': zs['location'],
+            'weight': zs['weight'],
+            'fx_mark': xd['fx_mark'],
+            'pct_change': xd['pct_change'],
+        }
 
+        if xd['fx_mark'] > 0:  # 上升趋势
+            if xd['value'] > zs['GG'][-1]['value']:
+                xd_mark = -1  # 如果weight=1, 背驰，有可能1卖
+            elif xd['value'] > zs['ZG']['value']:
+                xd_mark = -2  # 如果weight=1, 背驰，有可能2卖
+            elif xd['value'] > zs['ZD']['value']:
+                xd_mark = -4
+            elif xd['value'] > zs['DD'][-1]['value']:
+                xd_mark = -5
+            else:
+                xd_mark = -3  # 三卖
+        elif xd['fx_mark'] < 0:  # 下降趋势
+            if xd['value'] > zs['GG'][-1]['value']:
+                xd_mark = 3  # 三买
+            elif xd['value'] > zs['ZG']['value']:
+                xd_mark = 5
+            elif xd['value'] > zs['ZD']['value']:
+                xd_mark = 4
+            elif xd['value'] > zs['DD'][-1]['value']:
+                xd_mark = 2  # 如果weight=1, 背驰，有可能2买
+            else:
+                xd_mark = 1  # 如果weight=1, 背驰，有可能1买
+        else:
+            raise ValueError
 
+        sig.update(xd_mark=xd_mark)
+        self.sig_list.append(sig)
 
 
 def update_bi(new_bars: list, fx_list: list, bi_list: XdList, trade_date: list):
@@ -690,6 +724,7 @@ class CzscBase:
             xd_list.update_zs()
 
             # 计算对应买卖点
+            xd_list.update_sig(trade_date=self._trade_date)
 
             result = xd_list.update_xd(trade_date=self._trade_date)
             temp_list = xd_list
@@ -785,7 +820,13 @@ class CzscMongo(CzscBase):
         index = 0
         data = []
         while xd:
-            data.append({'xd{}'.format(index): xd.xd_list, 'zs{}'.format(index): xd.zs_list})
+            data.append(
+                {
+                    'xd{}'.format(index): xd.xd_list,
+                    'zs{}'.format(index): xd.zs_list,
+                    'sig{}'.format(index): xd.sig_list
+                }
+            )
             xd = xd.next
             index = index + 1
 
@@ -1132,7 +1173,7 @@ def main_consumer():
 
 
 def main_mongo():
-    czsc_mongo = CzscMongo(code='300316', freq='day', exchange='szse')
+    czsc_mongo = CzscMongo(code='sa2105', freq='day', exchange='szse')
     czsc_mongo.run()
     czsc_mongo.draw()
     czsc_mongo.to_json()
