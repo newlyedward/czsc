@@ -329,7 +329,7 @@ class XdList(object):
         last_xd = self.xd_list[-2]
         xd.update(pct_change=(xd['value'] - last_xd['value']) / last_xd['value'])
         kn = trade_date.index(xd['date']) - trade_date.index(last_xd['date']) + 1
-        xd.update(fx_mark=kn * np.sign(xd.get('fx_mark', -xd.get('direction', 0))))
+        xd.update(fx_mark=kn * np.sign(xd.get('fx_mark', xd.get('direction', 0))))
 
     def update_xd(self, trade_date: list):
         """更新笔分型序列
@@ -1120,7 +1120,7 @@ def main_consumer():
 
 
 def main_mongo():
-    czsc_mongo = CzscMongo(code='601012', freq='day', exchange='sse')
+    czsc_mongo = CzscMongo(code='300316', freq='day', exchange='szse')
     czsc_mongo.run()
     czsc_mongo.draw()
     czsc_mongo.to_json()
