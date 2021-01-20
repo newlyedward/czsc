@@ -197,11 +197,12 @@ def update_fx(bars, new_bars: list, fx_list: list, trade_date: list):
 class XdList(object):
     """存放线段"""
 
-    def __init__(self, xd_list=[], zs_list=[]):
+    def __init__(self):
         # item存放数据元素
-        self.xd_list = xd_list.copy()  # 否则指向同一个地址
+        self.xd_list = []  # 否则指向同一个地址
         # 低级别的中枢
-        self.zs_list = zs_list.copy()
+        self.zs_list = []
+        self.sig = []
         # next是低一级别的线段
         self.next = None
         # prev 指向高一级别的线段
@@ -457,6 +458,15 @@ class XdList(object):
                     return True
         return False
 
+    def update_sig(self, trade_date):
+        """
+        线段更新后调用，判断是否出现买点
+        """
+        zs = self.zs_list[-1]
+        xd = self.xd_list[-1]
+
+
+
 
 def update_bi(new_bars: list, fx_list: list, bi_list: XdList, trade_date: list):
     """更新笔序列
@@ -678,6 +688,8 @@ class CzscBase:
         result = True
         while result:
             xd_list.update_zs()
+
+            # 计算对应买卖点
 
             result = xd_list.update_xd(trade_date=self._trade_date)
             temp_list = xd_list
