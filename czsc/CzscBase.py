@@ -526,36 +526,32 @@ def update_bi(new_bars: list, fx_list: list, bi_list: XdList, trade_date: list):
       return: True 笔的数据出现更新，包括新增笔或者笔的延续
     """
     # 每根k线都要对bi进行判断
+    bar = new_bars[-1].copy()
+
+    if bar['date'] < trade_date[-1]:
+        return
+
     if len(fx_list) < 2:
         return False
 
     bi = fx_list[-1].copy()
 
-    # bi不需要考虑转折的分型强度
-    # bi.pop('fx_power')
-    # bi.update(code=self.code)  # 存储数据库需要
     # 没有笔时.最开始两个分型作为第一笔，增量更新时从数据库取出两个端点构成的笔时确定的
     if len(bi_list) < 1:
         bi2 = fx_list[-2].copy()
-        # bi2.pop('fx_power')
-        # bi2.update(code=self.code)
         bi_list.append(bi2)
         bi_list.append(bi)
         bi_list.update_xd_eigenvalue(trade_date)
         return False
 
     last_bi = bi_list[-1]
-
-    bar = new_bars[-1].copy()
     bar.update(value=bar['high'] if bar['direction'] > 0 else bar['low'])
-
-    if bar['date'] == pd.to_datetime('2020-08-03'):
-        print('error')
 
     # k 线确认模式，当前K线的日期比分型K线靠后，说明进来的数据时K线
     if bar['date'] > bi['fx_end']:
         if 'direction' not in last_bi:  # bi的结尾是分型
             # 趋势延续替代,首先确认是否延续, 由于处理过包含，高低点可能不正确，反趋势的极值点会忽略
+            # 下一根继续趋势，端点后移，如果继续反趋势，该点忽略
             if (last_bi['fx_mark'] > 0 and bar['high'] > last_bi['value']) \
                     or (last_bi['fx_mark'] < 0 and bar['low'] < last_bi['value']):
                 bi_list[-1] = bar
@@ -657,6 +653,7 @@ def update_bi(new_bars: list, fx_list: list, bi_list: XdList, trade_date: list):
             return True
 
     return handle_fx_end()
+
 
 class CzscBase:
     def __init__(self, code, freq):
@@ -776,8 +773,8 @@ class CzscMongo(CzscBase):
         else:
             start = '1990-01-01'
 
-        # self.data = get_bar(code, start, freq=freq, exchange=exchange)
-        self.data = get_bar(code, start, end='2020-12-09', freq=freq, exchange=exchange)
+        self.data = get_bar(code, start, freq=freq, exchange=exchange)
+        # self.data = get_bar(code, start, end='2020-12-09', freq=freq, exchange=exchange)
 
     def draw(self, chart_path=None):
         chart = kline_pro(
@@ -1194,7 +1191,7 @@ def main_consumer():
 
 
 def main_mongo():
-    czsc_mongo = CzscMongo(code='sa2105', freq='day', exchange='szse')
+    czsc_mongo = CzscMongo(code='srl8', freq='day', exchange='szse')
     czsc_mongo.run()
     czsc_mongo.draw()
     czsc_mongo.to_json()
