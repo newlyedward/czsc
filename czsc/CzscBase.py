@@ -234,6 +234,10 @@ class XdList(object):
           }
         """
         xd_list = self.xd_list
+
+        if len(xd_list) < 3:
+            return False
+
         zs_list = self.zs_list
 
         if len(zs_list) < 1:
@@ -257,7 +261,7 @@ class XdList(object):
         last_zs = zs_list[-1]
         xd = xd_list[-2]
 
-        if last_zs['xd_list'][-1]['date'] == xd['date']:
+        if last_zs['xd_list'][-1]['date'] >= xd['date']:
             # 已经计算过中枢
             return False
 
@@ -462,6 +466,9 @@ class XdList(object):
         """
         线段更新后调用，判断是否出现买点
         """
+        if len(self.zs_list) < 1:
+            return
+
         zs = self.zs_list[-1]
         xd = self.xd_list[-1]
         sig = {
@@ -1191,7 +1198,7 @@ def main_consumer():
 
 
 def main_mongo():
-    czsc_mongo = CzscMongo(code='srl8', freq='day', exchange='szse')
+    czsc_mongo = CzscMongo(code='cfl8', freq='day', exchange='szse')
     czsc_mongo.run()
     czsc_mongo.draw()
     czsc_mongo.to_json()
