@@ -549,10 +549,13 @@ def update_bi(new_bars: list, fx_list: list, bi_list: XdList, trade_date: list):
     bar = new_bars[-1].copy()
     bar.update(value=bar['high'] if bar['direction'] > 0 else bar['low'])
 
+    if bar['date'] == pd.to_datetime('2020-08-03'):
+        print('error')
+
     # k 线确认模式，当前K线的日期比分型K线靠后，说明进来的数据时K线
     if bar['date'] > bi['fx_end']:
         if 'direction' not in last_bi:  # bi的结尾是分型
-            # 趋势延续替代,首先确认是否延续
+            # 趋势延续替代,首先确认是否延续, 由于处理过包含，高低点可能不正确，反趋势的极值点会忽略
             if (last_bi['fx_mark'] > 0 and bar['high'] > last_bi['value']) \
                     or (last_bi['fx_mark'] < 0 and bar['low'] < last_bi['value']):
                 bi_list[-1] = bar
@@ -564,8 +567,8 @@ def update_bi(new_bars: list, fx_list: list, bi_list: XdList, trade_date: list):
             except:
                 print('error')
 
-            # 必须被和笔方向相同趋势的k线代替，相反方向的会形成分型，由分型处理
-            if kn_inside > 2 and bar['direction'] * last_bi['fx_mark'] < 0:  # 两个分型间至少有1根k线，端点有可能不是高低点
+            # todo 至少2根k线， 时间确认必须被和前一笔方向相反
+            if kn_inside > 2 and bar['direction'] * last_bi['fx_mark'] < 0:
                 bi_list.append(bar)
                 bi_list.update_xd_eigenvalue(trade_date)
                 return True
@@ -583,15 +586,32 @@ def update_bi(new_bars: list, fx_list: list, bi_list: XdList, trade_date: list):
 
         else:  # 原有未出现分型笔的延续，todo,只能替代原趋势，需要增加assert
             assert bar['direction'] * last_bi['direction'] > 0
+            # if bar['direction'] * last_bi['direction'] < 0:
+            #     print('error')
+            #     return False
             bi_list[-1] = bar
             bi_list.update_xd_eigenvalue(trade_date)
             return True
+        return False
 
     # 非分型结尾笔，直接替换成分型, 没有新增笔，后续不需要处理，同一个端点确认
     if 'direction' in last_bi or bi['date'] == last_bi['date']:
         bi_list[-1] = bi
         bi_list.update_xd_eigenvalue(trade_date)
         return True
+
+    # fx_end处理，分型处理完后，因为分型确认滞后，所以还需要对fx_end 也就是当前K线进行处理，否则会出现缺失或者识别滞后的问题
+    # 由于时分型，只需要判断延续的问题，因此K线的方向要和上一笔一致
+    def handle_fx_end():
+        assert bar['date'] == bi['fx_end']
+        if bar['direction'] * last_bi['fx_mark'] < 0:
+            return False
+
+        if (last_bi['fx_mark'] < 0 and bar['value'] < last_bi['value']) \
+                or (last_bi['fx_mark'] > 0 and bar['value'] > last_bi['value']):
+            bi_list[-1] = bar
+            bi_list.update_xd_eigenvalue(trade_date)
+            return True
 
     # 分型处理，连续高低点处理，只判断是否后移,没有增加笔
     if last_bi['fx_mark'] * bi['fx_mark'] > 0:
@@ -600,8 +620,8 @@ def update_bi(new_bars: list, fx_list: list, bi_list: XdList, trade_date: list):
             bi_list[-1] = bi
             bi_list.update_xd_eigenvalue(trade_date)
             return True
-    else:  # 笔确认是条件1、时间破坏，两个不同分型间至少有一根K线，2、价格破坏，向下的一笔破坏了上一笔的低点
-        # 时间确认,函数算了首尾，所以要删除
+    else:
+        # 笔确认是条件1、时间破坏，两个不同分型间至少有一根K线，2、价格破坏，向下的一笔破坏了上一笔的低点
         kn_inside = trade_date.index(bi['fx_start']) - trade_date.index(last_bi['fx_end']) - 1
 
         if kn_inside > 0:  # 两个分型间至少有1根k线，端点有可能不是高低点
@@ -636,6 +656,7 @@ def update_bi(new_bars: list, fx_list: list, bi_list: XdList, trade_date: list):
             bi_list.update_xd_eigenvalue(trade_date)
             return True
 
+    return handle_fx_end()
 
 class CzscBase:
     def __init__(self, code, freq):
@@ -755,8 +776,8 @@ class CzscMongo(CzscBase):
         else:
             start = '1990-01-01'
 
-        self.data = get_bar(code, start, freq=freq, exchange=exchange)
-        # self.Data = get_bar(code, start, end='2016-9-28', freq=freq, exchange=exchange)
+        # self.data = get_bar(code, start, freq=freq, exchange=exchange)
+        self.data = get_bar(code, start, end='2020-12-09', freq=freq, exchange=exchange)
 
     def draw(self, chart_path=None):
         chart = kline_pro(
