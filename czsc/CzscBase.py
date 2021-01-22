@@ -390,7 +390,9 @@ class XdList(object):
             xd_list.update_xd_eigenvalue(trade_date)
             return True
 
-        assert xd['date'] > last_xd['date']
+        # assert xd['date'] > last_xd['date']
+        if xd['date'] <= last_xd['date']:
+            print('error')
 
         if bi3['fx_mark'] > 0:
             # 同向延续
@@ -486,18 +488,18 @@ class XdList(object):
             elif xd['value'] > zs['ZG']['value']:
                 xd_mark = -2  # 如果weight=1, 背驰，有可能2卖
             elif xd['value'] > zs['ZD']['value']:
-                xd_mark = -4
+                xd_mark = -2.5
             elif xd['value'] > zs['DD'][-1]['value']:
-                xd_mark = -5
-            else:
                 xd_mark = -3  # 三卖
+            else:
+                xd_mark = -4  # 三卖
         elif xd['fx_mark'] < 0:  # 下降趋势
             if xd['value'] > zs['GG'][-1]['value']:
-                xd_mark = 3  # 三买
+                xd_mark = 4  # 三买
             elif xd['value'] > zs['ZG']['value']:
-                xd_mark = 5
+                xd_mark = 3
             elif xd['value'] > zs['ZD']['value']:
-                xd_mark = 4
+                xd_mark = 2.5
             elif xd['value'] > zs['DD'][-1]['value']:
                 xd_mark = 2  # 如果weight=1, 背驰，有可能2买
             else:
@@ -663,10 +665,10 @@ def update_bi(new_bars: list, fx_list: list, bi_list: XdList, trade_date: list):
 
 
 class CzscBase:
-    def __init__(self, code, freq):
-        self.freq = freq
-        assert isinstance(code, str)
-        self.code = code.upper()
+    def __init__(self):
+        # self.freq = freq
+        # assert isinstance(code, str)
+        # self.code = code.upper()
 
         self._trade_date = []  # 用来查找索引
         self._bars = []
@@ -769,7 +771,10 @@ class CzscBase:
 class CzscMongo(CzscBase):
     def __init__(self, code='rbl8', freq='day', exchange=None):
         # 只处理一个品种
-        super().__init__(code, freq)
+        super().__init__()
+        self.code = code
+        self.freq = freq
+        self.exchange = exchange
 
         # self._bi_list = fetch_future_bi_day(self.code, limit=2, format='dict')
         self._bi_list = []
@@ -839,6 +844,81 @@ class CzscMongo(CzscBase):
             collection.insert_many(bi_list)
         except Exception as error:
             print(error)
+
+    def save_sig(self, collection=FACTOR_DATABASE.czsz_sig_day):
+        try:
+            logging.info('Now Saving CZSC_SIG_DAY==== {}'.format(str(self.code)))
+            code = self.code
+
+            xd = self._xd_list
+            index = 0
+            sig = []
+            while xd:
+                df = pd.DataFrame(xd.sig_list)
+                df['xd'] = index
+                df['code'] = code
+                df['exchange'] = self.exchange
+                sig.append(df)
+                xd = xd.next
+                index = index + 1
+
+            sig_df = pd.concat(sig).set_index(['date', 'xd']).sort_index()
+
+            old_count = self.old_count
+            new_count = len(self._bi_list)
+
+            # 更新的数据，最后一个数据是未确定数据
+            update_count = new_count - old_count
+
+            if update_count < 2:
+                return
+
+            bi_list = self._bi_list[old_count:new_count - 1]
+
+            start = bi_list[0]['date']
+            end = bi_list[-1]['date']
+            logging.info(
+                'UPDATE_Future_BI_DAY \n Trying updating {} from {} to {}'.format(code, start, end),
+            )
+
+            collection.insert_many(bi_list)
+        except Exception as error:
+            print(error)
+
+    def to_csv(self):
+        xd = self._xd_list
+        index = 0
+        sig = []
+        while xd:
+            df = pd.DataFrame(xd.sig_list)
+            df['xd'] = index
+            sig.append(df)
+            xd = xd.next
+            index = index + 1
+
+        sig_df = pd.concat(sig).set_index(['date', 'xd']).sort_index()
+        filename = '{}.csv'.format(self.code)
+        sig_df.to_csv(filename)
+
+    def to_df(self):
+        xd = self._xd_list
+        index = 0
+        sig = []
+        while xd:
+            df = pd.DataFrame(xd.sig_list)
+            df['xd'] = index
+            df['code'] = self.code
+            df['exchange'] = self.exchange
+            sig.append(df)
+            xd = xd.next
+            index = index + 1
+
+        try:
+            sig_df = pd.concat(sig).set_index(['date', 'xd']).sort_index()
+            return sig_df
+        except:
+            util_log_info("{} signal is empty!".format(self.code))
+            return pd.DataFrame()
 
     def to_json(self):
         xd = self._xd_list
@@ -1197,13 +1277,34 @@ def main_consumer():
     webbrowser.open(chart_path)
 
 
-def main_mongo():
-    czsc_mongo = CzscMongo(code='cfl8', freq='day', exchange='szse')
+def main_signal():
+    from czsc.Fetch.tdx import SECURITY_DATAFRAME
+    sig_list = []
+    for code, item in SECURITY_DATAFRAME.iterrows():
+        util_log_info("============={} {} Signal==========".format(code, item['exchange']))
+        try:
+            czsc_mongo = CzscMongo(code=code, freq='day', exchange=item['exchange'])
+        except Exception as error:
+            util_log_info("{} : {}".format(code, error))
+            continue
+        czsc_mongo.run()
+        df = czsc_mongo.to_df()
+        if df.empty:
+            continue
+        df = df[df.index.get_level_values(0) > pd.to_datetime('2021-01-17')]
+        sig_list.append(df)
+
+    df = pd.concat(sig_list)
+    df.to_csv('signal.csv')
+
+
+def main_single():
+    czsc_mongo = CzscMongo(code='bul9', freq='day', exchange='sse')
     czsc_mongo.run()
     czsc_mongo.draw()
-    czsc_mongo.to_json()
 
 
 if __name__ == '__main__':
     # main_consumer()
-    main_mongo()
+    # main_signal()
+    main_single()

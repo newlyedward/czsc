@@ -259,7 +259,7 @@ def get_bar(code, start=None, end=None, freq='day', exchange=None):
         util_log_info('Not supported frequency {}'.format(freq))
         return
 
-    if not file_path:
+    if not os.path.exists(file_path):
         return
 
     # 统一freq的数据结构
