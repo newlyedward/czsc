@@ -563,14 +563,15 @@ def update_bi(new_bars: list, fx_list: list, bi_list: XdList, trade_date: list):
     last_bi = bi_list[-1]
     bar.update(value=bar['high'] if bar['direction'] > 0 else bar['low'])
 
-    if bar['date'] > pd.to_datetime('2016-11-09'):
-        print('error')
+    # if bar['date'] > pd.to_datetime('2016-11-09'):
+    #     print('error')
 
     # k 线确认模式，当前K线的日期比分型K线靠后，说明进来的数据时K线
     if bar['date'] > bi['fx_end']:
         if 'direction' not in last_bi:  # bi的结尾是分型
             # 趋势延续替代,首先确认是否延续, 由于处理过包含，高低点可能不正确，反趋势的极值点会忽略
             # 下一根继续趋势，端点后移，如果继续反趋势，该点忽略
+            # todo 处理过包含的bar，有一个判断是多余的，直接用bar['value] 参与判断
             if (last_bi['fx_mark'] > 0 and bar['high'] > last_bi['value']) \
                     or (last_bi['fx_mark'] < 0 and bar['low'] < last_bi['value']):
                 bi_list[-1] = bar
@@ -606,6 +607,7 @@ def update_bi(new_bars: list, fx_list: list, bi_list: XdList, trade_date: list):
                 return False
 
             # 价格确认
+            # todo 处理过包含的bar，有一个判断是多余的，直接用bar['value] 参与判断
             if (last_bi['fx_mark'] < 0 and bar['high'] > bi_list[-2]['value']) \
                     or (last_bi['fx_mark'] > 0 and bar['low'] < bi_list[-2]['value']):
                 bi_list.append(bar)
@@ -673,6 +675,7 @@ def update_bi(new_bars: list, fx_list: list, bi_list: XdList, trade_date: list):
             return False
 
         # 价格确认
+        # todo 处理过包含的bar，有一个判断是多余的，直接用bar['value] 参与判断
         if (bi['fx_mark'] > 0 and bi['value'] > bi_list[-2]['value']) \
                 or (bi['fx_mark'] < 0 and bi['value'] < bi_list[-2]['value']):
             bi_list.append(bi)
