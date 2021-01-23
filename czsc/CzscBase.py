@@ -584,7 +584,18 @@ def update_bi(new_bars: list, fx_list: list, bi_list: XdList, trade_date: list):
 
             # todo 至少2根k线， 时间确认必须被和前一笔方向相反，会出现端点不是极值点的情况
             if kn_inside > 2 and bar['direction'] * last_bi['fx_mark'] < 0:
-                bi_list.append(bar)
+                # 寻找同向的第一根分型
+                index = -1
+                while bi['date'] > last_bi['date']:
+                    if bar['direction'] * bi['fx_mark'] > 0:
+                        break
+                    index = index - 1
+                    bi = fx_list[index]
+
+                if (bar['direction'] * bi['fx_mark'] > 0) and (np.sign(bar['direction']) * bar['value'] < bi['fx_mark'] * bi['value']):
+                    bi_list.append(bi)
+                else:
+                    bi_list.append(bar)
                 bi_list.update_xd_eigenvalue(trade_date)
                 return True
 
@@ -622,7 +633,6 @@ def update_bi(new_bars: list, fx_list: list, bi_list: XdList, trade_date: list):
         if bar['direction'] * last_bi['fx_mark'] < 0:
             return False
 
-        # todo 将逻辑判断改为数学运算
         if last_bi['fx_mark'] * bar['value'] > last_bi['fx_mark'] * last_bi['value']:
             bi_list[-1] = bar
             bi_list.update_xd_eigenvalue(trade_date)
