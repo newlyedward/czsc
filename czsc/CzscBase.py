@@ -120,7 +120,13 @@ def update_fx(bars, new_bars: list, fx_list: list, trade_date: list):
     assert len(bars) > 0
     bar = bars[-1].copy()
 
+    if len(trade_date) > 1:
+        if bar['date'] < trade_date[-1]:
+            util_log_info('{} data is older than {} !'.format(bar['date'], trade_date[-1]))
+            return
+
     trade_date.append(bar['date'])
+
     # 第1根K线没有方向,不需要任何处理
     if len(bars) < 2:
         new_bars.append(bar)
@@ -392,7 +398,7 @@ class XdList(object):
 
         # assert xd['date'] > last_xd['date']
         if xd['date'] <= last_xd['date']:
-            print('error')
+            util_log_info('The {} quotes bar input maybe wrong!'.format(xd['date']))
 
         if bi3['fx_mark'] > 0:
             # 同向延续
@@ -792,8 +798,8 @@ class CzscMongo(CzscBase):
         chart = kline_pro(
             kline=self._bars, fx=self._fx_list,
             bs=self._sig_list, xd=self._xd_list,
-            title=self.code, width='1520px', height='580px'
-            # title=self.code, width='2540px', height='850px'
+            # title=self.code, width='1520px', height='580px'
+            title=self.code, width='2540px', height='850px'
         )
 
         if not chart_path:
@@ -1299,7 +1305,7 @@ def main_signal():
 
 
 def main_single():
-    czsc_mongo = CzscMongo(code='bul9', freq='day', exchange='sse')
+    czsc_mongo = CzscMongo(code='IMCI', freq='day', exchange='sse')
     czsc_mongo.run()
     czsc_mongo.draw()
 
