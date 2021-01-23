@@ -104,14 +104,14 @@ def update_fx(bars, new_bars: list, fx_list: list, trade_date: list):
         分型记对象样例：
          {
              'date': Timestamp('2020-11-26 00:00:00'),
-              'fx_mark': -8, 低点用负数表示，绝对值表示K线根数
+              'fx_mark': -1, 低点用—1表示
               'value': 138.0,
               'fx_start': Timestamp('2020-11-25 00:00:00'),
               'fx_end': Timestamp('2020-11-27 00:00:00'),
           }
          {
              'date': Timestamp('2020-11-26 00:00:00'),
-              'fx_mark': +9, 高点用正数表示，绝对值表示K线根数
+              'fx_mark': +1, 高点用+1表示
               'value': 150.67,
               'fx_start': Timestamp('2020-11-25 00:00:00'),
               'fx_end': Timestamp('2020-11-27 00:00:00'),
@@ -544,7 +544,8 @@ def update_bi(new_bars: list, fx_list: list, bi_list: XdList, trade_date: list):
     bar = new_bars[-1].copy()
 
     if bar['date'] < trade_date[-1]:
-        return
+        # 行情数据出现错误
+        return False
 
     if len(fx_list) < 2:
         return False
@@ -562,6 +563,9 @@ def update_bi(new_bars: list, fx_list: list, bi_list: XdList, trade_date: list):
     last_bi = bi_list[-1]
     bar.update(value=bar['high'] if bar['direction'] > 0 else bar['low'])
 
+    if bar['date'] > pd.to_datetime('2021-01-14'):
+        print('error')
+
     # k 线确认模式，当前K线的日期比分型K线靠后，说明进来的数据时K线
     if bar['date'] > bi['fx_end']:
         if 'direction' not in last_bi:  # bi的结尾是分型
@@ -578,7 +582,7 @@ def update_bi(new_bars: list, fx_list: list, bi_list: XdList, trade_date: list):
             except:
                 print('error')
 
-            # todo 至少2根k线， 时间确认必须被和前一笔方向相反
+            # todo 至少2根k线， 时间确认必须被和前一笔方向相反，会出现端点不是极值点的情况
             if kn_inside > 2 and bar['direction'] * last_bi['fx_mark'] < 0:
                 bi_list.append(bar)
                 bi_list.update_xd_eigenvalue(trade_date)
@@ -595,7 +599,7 @@ def update_bi(new_bars: list, fx_list: list, bi_list: XdList, trade_date: list):
                 bi_list.update_xd_eigenvalue(trade_date)
                 return True
 
-        else:  # 原有未出现分型笔的延续，todo,只能替代原趋势，需要增加assert
+        else:  # 原有未出现分型笔的延续
             assert bar['direction'] * last_bi['direction'] > 0
             # if bar['direction'] * last_bi['direction'] < 0:
             #     print('error')
@@ -618,16 +622,17 @@ def update_bi(new_bars: list, fx_list: list, bi_list: XdList, trade_date: list):
         if bar['direction'] * last_bi['fx_mark'] < 0:
             return False
 
-        if (last_bi['fx_mark'] < 0 and bar['value'] < last_bi['value']) \
-                or (last_bi['fx_mark'] > 0 and bar['value'] > last_bi['value']):
+        # todo 将逻辑判断改为数学运算
+        if last_bi['fx_mark'] * bar['value'] > last_bi['fx_mark'] * last_bi['value']:
             bi_list[-1] = bar
             bi_list.update_xd_eigenvalue(trade_date)
             return True
 
     # 分型处理，连续高低点处理，只判断是否后移,没有增加笔
+    # bi的fx_mark不一定为+1或者-1，因为要用sign函数取符号
+    # todo 为什么用 and 连接两个 if 结果错误
     if last_bi['fx_mark'] * bi['fx_mark'] > 0:
-        if (last_bi['fx_mark'] > 0 and last_bi['value'] < bi['value']) \
-                or (last_bi['fx_mark'] < 0 and last_bi['value'] > bi['value']):
+        if np.sign(last_bi['fx_mark']) * last_bi['value'] < bi['fx_mark'] * bi['value']:
             bi_list[-1] = bi
             bi_list.update_xd_eigenvalue(trade_date)
             return True
@@ -638,14 +643,9 @@ def update_bi(new_bars: list, fx_list: list, bi_list: XdList, trade_date: list):
         if kn_inside > 0:  # 两个分型间至少有1根k线，端点有可能不是高低点
             index = -2
             while fx_list[index]['date'] > last_bi['date']:
-
-                # if bi['fx_mark'] == self._fx_list[index]['fx_mark']:
-                #     if bi['fx_mark'] == 'd' and bi['value'] > self._fx_list[index]['value']:
-
-                if (bi['fx_mark'] < 0 and 0 > fx_list[index]['fx_mark']
-                    and bi['value'] > fx_list[index]['value']) \
-                        or (bi['fx_mark'] > 0 and 0 < fx_list[index]['fx_mark']
-                            and bi['value'] < fx_list[index]['value']):
+                # 分析的fx_mark取值为-1和+1
+                if (bi['fx_mark'] * fx_list[index]['fx_mark'] > 0) \
+                        and (bi['fx_mark'] * bi['value'] < fx_list[index]['fx_mark'] * fx_list[index]['value']) :
                     bi = fx_list[index].copy()
                     # 分型结尾不变
                     bi['fx_end'] = fx_list[-1]['fx_end']
@@ -1305,7 +1305,7 @@ def main_signal():
 
 
 def main_single():
-    czsc_mongo = CzscMongo(code='IMCI', freq='day', exchange='sse')
+    czsc_mongo = CzscMongo(code='600696', freq='day', exchange='sse')
     czsc_mongo.run()
     czsc_mongo.draw()
 
