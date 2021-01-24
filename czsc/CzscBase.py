@@ -484,10 +484,10 @@ class XdList(object):
         zs = self.zs_list[-1]
         xd = self.xd_list[-1]
         last_xd = self.xd_list[-2]
-        if len(self.zs_list) > 1:
-            last_zs = self.zs_list[-2]    # 中枢不一定存在
-        else:
-            last_zs = None
+        # if len(self.zs_list) > 1:
+        #     last_zs = self.zs_list[-2]    # 中枢不一定存在
+        # else:
+        #     last_zs = None
 
         sig = {
             'date': trade_date[-1],
@@ -496,16 +496,14 @@ class XdList(object):
             'weight': zs['weight'],
             'fx_mark': xd['fx_mark'],
             'last_mark': last_xd['fx_mark'],
+            'time_ratio': xd['fx_mark'] / last_xd['fx_mark'],
             'pct_change': xd['pct_change'],
         }
 
         if xd['fx_mark'] > 0:  # 上升趋势
             if xd['value'] > zs['GG'][-1]['value']:
                 xd_mark = -1  # 如果weight=1, 背驰，有可能1卖
-                if last_zs and zs['location'] < 0:
-                    resistance = last_zs['DD'][-1]['value'] / xd['value'] - 1
-                else:
-                    resistance = np.nan
+                resistance = np.nan
                 support = zs['GG'][-1]['value'] / xd['value'] - 1
             elif xd['value'] > zs['ZG']['value']:
                 xd_mark = -2  # 如果weight=1, 背驰，有可能2卖
@@ -544,14 +542,7 @@ class XdList(object):
             else:
                 xd_mark = 1  # 如果weight=1, 背驰，有可能1买
                 resistance = zs['DD'][-1]['value'] / xd['value'] - 1
-                if last_zs and zs['location'] > 0:
-                    try:
-                        support = last_zs['GG'][-1]['value'] / xd['value'] - 1
-                    except:
-                        support = np.nan
-                        print('error')
-                else:
-                    support = np.nan
+                support = np.nan
         else:
             raise ValueError
 
@@ -1370,5 +1361,5 @@ def main_single():
 
 if __name__ == '__main__':
     # main_consumer()
-    # main_signal()
-    main_single()
+    main_signal()
+    # main_single()
