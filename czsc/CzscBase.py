@@ -275,10 +275,12 @@ class XdList(object):
             # 三卖 ,滞后，实际出现了一买信号
             if xd['value'] < last_zs['ZD']['value']:
                 zs_end = last_zs['xd_list'].pop(-1)
+                if zs_end['date'] == last_zs['DD'][-1]['date']:
+                    last_zs['DD'].pop(-1)
                 last_zs.update(
                     zs_end=zs_end,
                     weight=last_zs['weight'] - 1,
-                    DD=last_zs['DD'].pop(-1) if zs_end['date'] == last_zs['DD'][-1]['date'] else last_zs['DD'],
+                    DD=last_zs['DD'],
                     real_loc=last_zs['real_loc'] + 1 if last_zs['weight'] == 2 else last_zs['real_loc']
                 )
 
@@ -304,10 +306,12 @@ class XdList(object):
             # 三买，滞后，实际出现了一卖信号
             if xd['value'] > last_zs['ZG']['value']:
                 zs_end = last_zs['xd_list'].pop(-1)
+                if zs_end['date'] == last_zs['GG'][-1]['date']:
+                    last_zs['GG'].pop(-1)
                 last_zs.update(
                     zs_end=zs_end,
                     weight=last_zs['weight'] - 1,
-                    GG=last_zs['GG'].pop(-1) if zs_end['date'] == last_zs['GG'][-1]['date'] else last_zs['GG'],
+                    GG=last_zs['GG'],
                     real_loc=last_zs['real_loc'] - 1 if last_zs['weight'] == 2 else last_zs['real_loc']
                 )
                 zs = {
@@ -479,41 +483,79 @@ class XdList(object):
 
         zs = self.zs_list[-1]
         xd = self.xd_list[-1]
+        last_xd = self.xd_list[-2]
+        if len(self.zs_list) > 1:
+            last_zs = self.zs_list[-2]    # 中枢不一定存在
+        else:
+            last_zs = None
+
         sig = {
             'date': trade_date[-1],
             'real_loc': zs['real_loc'],
             'location': zs['location'],
             'weight': zs['weight'],
             'fx_mark': xd['fx_mark'],
+            'last_mark': last_xd['fx_mark'],
             'pct_change': xd['pct_change'],
         }
 
         if xd['fx_mark'] > 0:  # 上升趋势
             if xd['value'] > zs['GG'][-1]['value']:
                 xd_mark = -1  # 如果weight=1, 背驰，有可能1卖
+                if last_zs and zs['location'] < 0:
+                    resistance = last_zs['DD'][-1]['value'] / xd['value'] - 1
+                else:
+                    resistance = np.nan
+                support = zs['GG'][-1]['value'] / xd['value'] - 1
             elif xd['value'] > zs['ZG']['value']:
                 xd_mark = -2  # 如果weight=1, 背驰，有可能2卖
+                resistance = zs['GG'][-1]['value'] / xd['value'] - 1
+                support = zs['ZG']['value'] / xd['value'] - 1
             elif xd['value'] > zs['ZD']['value']:
                 xd_mark = -2.5
+                resistance = zs['ZG']['value'] / xd['value'] - 1
+                support = zs['ZD']['value'] / xd['value'] - 1
             elif xd['value'] > zs['DD'][-1]['value']:
                 xd_mark = -3  # 三卖
+                resistance = zs['ZD']['value'] / xd['value'] - 1
+                support = zs['DD'][-1]['value'] / xd['value'] - 1
             else:
                 xd_mark = -4  # 三卖
+                resistance = zs['DD'][-1]['value'] / xd['value'] - 1
+                support = np.nan
+
         elif xd['fx_mark'] < 0:  # 下降趋势
             if xd['value'] > zs['GG'][-1]['value']:
                 xd_mark = 4  # 三买
+                resistance = np.nan
+                support = zs['GG'][-1]['value'] / xd['value'] - 1
             elif xd['value'] > zs['ZG']['value']:
                 xd_mark = 3
+                resistance = zs['GG'][-1]['value'] / xd['value'] - 1
+                support = zs['ZG']['value'] / xd['value'] - 1
             elif xd['value'] > zs['ZD']['value']:
                 xd_mark = 2.5
+                resistance = zs['ZG']['value'] / xd['value'] - 1
+                support = zs['ZD']['value'] / xd['value'] - 1
             elif xd['value'] > zs['DD'][-1]['value']:
                 xd_mark = 2  # 如果weight=1, 背驰，有可能2买
+                resistance = zs['ZD']['value'] / xd['value'] - 1
+                support = zs['DD'][-1]['value'] / xd['value'] - 1
             else:
                 xd_mark = 1  # 如果weight=1, 背驰，有可能1买
+                resistance = zs['DD'][-1]['value'] / xd['value'] - 1
+                if last_zs and zs['location'] > 0:
+                    try:
+                        support = last_zs['GG'][-1]['value'] / xd['value'] - 1
+                    except:
+                        support = np.nan
+                        print('error')
+                else:
+                    support = np.nan
         else:
             raise ValueError
 
-        sig.update(xd_mark=xd_mark)
+        sig.update(xd_mark=xd_mark, support=support, resistance=resistance)
         self.sig_list.append(sig)
 
 
@@ -1323,6 +1365,7 @@ def main_single():
     czsc_mongo = CzscMongo(code='600696', freq='day', exchange='sse')
     czsc_mongo.run()
     czsc_mongo.draw()
+    czsc_mongo.to_csv()
 
 
 if __name__ == '__main__':
