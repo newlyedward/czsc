@@ -866,7 +866,10 @@ class CzscMongo(CzscBase):
         # bar['date'] = pd.to_datetime(bar['date'])
         self._bars.append(bar)
 
-        self.update()
+        try:
+            self.update()
+        except Exception as error:
+            util_log_info(error)
 
     def run(self, start=None, end=None):
 
@@ -1353,7 +1356,7 @@ def main_signal():
 
 
 def main_single():
-    czsc_mongo = CzscMongo(code='600696', freq='day', exchange='sse')
+    czsc_mongo = CzscMongo(code='000582', freq='day', exchange='szse')
     czsc_mongo.run()
     czsc_mongo.draw()
     czsc_mongo.to_csv()
@@ -1361,5 +1364,5 @@ def main_single():
 
 if __name__ == '__main__':
     # main_consumer()
-    main_signal()
-    # main_single()
+    # main_signal()
+    main_single()
