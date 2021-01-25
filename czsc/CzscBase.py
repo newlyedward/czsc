@@ -628,7 +628,7 @@ def update_bi(new_bars: list, fx_list: list, bi_list: XdList, trade_date: list):
 
                 if (bar['direction'] * bi['fx_mark'] > 0) \
                         and (np.sign(bar['direction']) * bar['value'] < bi['fx_mark'] * bi['value']):
-                    bi['fx_end'] = bar['date']   # 影响似乎不大？
+                    bi['fx_end'] = bar['date']  # 影响似乎不大？
                     bi_list.append(bi)
                 else:
                     bi_list.append(bar)
@@ -692,7 +692,7 @@ def update_bi(new_bars: list, fx_list: list, bi_list: XdList, trade_date: list):
             while fx_list[index]['date'] > last_bi['date']:
                 # 分析的fx_mark取值为-1和+1
                 if (bi['fx_mark'] * fx_list[index]['fx_mark'] > 0) \
-                        and (bi['fx_mark'] * bi['value'] < fx_list[index]['fx_mark'] * fx_list[index]['value']) :
+                        and (bi['fx_mark'] * bi['value'] < fx_list[index]['fx_mark'] * fx_list[index]['value']):
                     bi = fx_list[index].copy()
                     # 分型结尾不变
                     bi['fx_end'] = fx_list[-1]['fx_end']
@@ -1336,8 +1336,15 @@ def main_consumer():
 
 def main_signal():
     from czsc.Fetch.tdx import SECURITY_DATAFRAME
+    security_df = SECURITY_DATAFRAME[
+        SECURITY_DATAFRAME.apply(
+            lambda security: security['instrument'] in ['future', 'ETF', 'stock']
+                             and security['exchange'] in ['czce', 'dce', 'shfe', 'cffex', 'sse', 'szse', 'hkconnect'],
+            axis=1
+        )
+    ]
     sig_list = []
-    for code, item in SECURITY_DATAFRAME.iterrows():
+    for code, item in security_df.iterrows():
         util_log_info("============={} {} Signal==========".format(code, item['exchange']))
         try:
             czsc_mongo = CzscMongo(code=code, freq='day', exchange=item['exchange'])
@@ -1348,7 +1355,7 @@ def main_signal():
         df = czsc_mongo.to_df()
         if df.empty:
             continue
-        df = df[df.index.get_level_values(0) > pd.to_datetime('2021-01-17')]
+        df = df[df.index.get_level_values(0) > pd.to_datetime('2021-01-21')]
         sig_list.append(df)
 
     df = pd.concat(sig_list)
@@ -1356,7 +1363,7 @@ def main_signal():
 
 
 def main_single():
-    czsc_mongo = CzscMongo(code='000582', freq='day', exchange='szse')
+    czsc_mongo = CzscMongo(code='pfl8', freq='day', exchange='szse')
     czsc_mongo.run()
     czsc_mongo.draw()
     czsc_mongo.to_csv()
