@@ -150,10 +150,19 @@ def _get_ds_list():
         '7': {'exchange': 'cffex', 'instrument': 'option'},
         '8': {'exchange': 'sse', 'instrument': 'option'},
         '9': {'exchange': 'szse', 'instrument': 'option'},
+        '27': {'exchange': 'hkse', 'instrument': 'index'},    # 香港指数
         '28': {'exchange': 'czce', 'instrument': 'future'},
         '29': {'exchange': 'dce', 'instrument': 'future'},
         '30': {'exchange': 'shfe', 'instrument': 'future'},
+        '31': {'exchange': 'hkse', 'instrument': 'stock'},    # 香港主板
+        '33': {'exchange': 'sse szse', 'instrument': 'OEF'},  # 开放式基金
+        '34': {'exchange': 'sse szse', 'instrument': 'MMF'},  # 货币型基金
+        '44': {'exchange': 'neeq', 'instrument': 'stock'},  # 股转系统
         '47': {'exchange': 'cffex', 'instrument': 'future'},
+        '48': {'exchange': 'hkse', 'instrument': 'stock'},  # 香港创业板
+        '49': {'exchange': 'hkse', 'instrument': 'TF'},  # 香港信托基金
+        '62': {'exchange': 'csindex', 'instrument': 'index'},  # 中证指数
+        '71': {'exchange': 'hkconnect', 'instrument': 'stock'},  # 港股通品种
         '102': {'exchange': 'sse szse', 'instrument': 'index'},
     }
     ds_dir = '{}{}{}'.format(_DS_DIR, os.sep, 'lday')
