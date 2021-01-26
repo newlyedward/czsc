@@ -30,12 +30,15 @@ import pymongo
 from pandas import DataFrame
 
 from czsc import KlineAnalyze
-from czsc.Utils.trade_date import util_get_real_date, trade_date_sse, util_date_valid, util_date_stamp
+from czsc.Data.financial_mean import financial_dict
+from czsc.Utils.trade_date import util_get_real_date, trade_date_sse, util_date_valid, util_date_stamp, \
+    util_date_str2int, util_date_int2str
 
-uri = 'mongodb://localhost:27017/factor'
-client = pymongo.MongoClient(uri)
-QA_DATABASE = client.quantaxis
-FACTOR_DATABASE = client.factor
+# uri = 'mongodb://localhost:27017/factor'
+# client = pymongo.MongoClient(uri)
+from czsc.Setting import CLIENT
+QA_DATABASE = CLIENT.quantaxis
+FACTOR_DATABASE = CLIENT.factor
 
 
 def util_code_tostr(code):
@@ -194,6 +197,109 @@ def fetch_future_day(
     else:
         logging.warning('Something wrong with date')
 
+
+def fetch_financial_report(code, report_date, ltype='EN', db=QA_DATABASE):
+    """
+    获取专业财务报表
+    :parmas
+        code: 股票代码或者代码list
+        report_date: 8位数字
+        ltype: 列名显示的方式
+    ：return
+        DataFrame, 索引为report_date和code
+    """
+
+    if isinstance(code, str):
+        code = [code]
+    if isinstance(report_date, str):
+        report_date = [util_date_str2int(report_date)]
+    elif isinstance(report_date, int):
+        report_date = [report_date]
+    elif isinstance(report_date, list):
+        report_date = [util_date_str2int(item) for item in report_date]
+
+    collection = db.financial
+    num_columns = [item[:3] for item in list(financial_dict.keys())]
+    CH_columns = [item[3:] for item in list(financial_dict.keys())]
+    EN_columns = list(financial_dict.values())
+    # num_columns.extend(['283', '_id', 'code', 'report_date'])
+    # CH_columns.extend(['283', '_id', 'code', 'report_date'])
+    # CH_columns = pd.Index(CH_columns)
+    # EN_columns = list(financial_dict.values())
+    # EN_columns.extend(['283', '_id', 'code', 'report_date'])
+    # EN_columns = pd.Index(EN_columns)
+
+    try:
+        if code is not None and report_date is not None:
+            data = [
+                item for item in collection.find(
+                    {
+                        'code': {
+                            '$in': code
+                        },
+                        'report_date': {
+                            '$in': report_date
+                        }
+                    },
+                    {"_id": 0},
+                    batch_size=10000
+                )
+            ]
+        elif code is None and report_date is not None:
+            data = [
+                item for item in collection.find(
+                    {'report_date': {
+                        '$in': report_date
+                    }},
+                    {"_id": 0},
+                    batch_size=10000
+                )
+            ]
+        elif code is not None and report_date is None:
+            data = [
+                item for item in collection
+                    .find({'code': {
+                    '$in': code
+                }},
+                    {"_id": 0},
+                    batch_size=10000)
+            ]
+        else:
+            data = [item for item in collection.find({}, {"_id": 0})]
+        if len(data) > 0:
+            res_pd = pd.DataFrame(data)
+
+            if ltype in ['CH', 'CN']:
+
+                cndict = dict(zip(num_columns, CH_columns))
+
+                cndict['code'] = 'code'
+                cndict['report_date'] = 'report_date'
+                res_pd.columns = res_pd.columns.map(lambda x: cndict[x])
+            elif ltype is 'EN':
+                endict = dict(zip(num_columns, EN_columns))
+
+                endict['code'] = 'code'
+                endict['report_date'] = 'report_date'
+                res_pd.columns = res_pd.columns.map(lambda x: endict[x])
+
+            if res_pd.report_date.dtype == numpy.int64:
+                res_pd.report_date = pd.to_datetime(
+                    res_pd.report_date.apply(util_date_int2str)
+                )
+            else:
+                res_pd.report_date = pd.to_datetime(res_pd.report_date)
+
+            return res_pd.replace(-4.039810335e+34,
+                                  numpy.nan).set_index(
+                ['report_date',
+                 'code'],
+                drop=False
+            )
+        else:
+            return None
+    except Exception as e:
+        raise e
 
 def fetch_future_bi_day(
         code,

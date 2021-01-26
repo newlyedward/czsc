@@ -53,7 +53,6 @@ class Setting:
     def __init__(self, uri=None):
         self.lock = Lock()
 
-        self.mongo_uri = uri or self.get_mongo_uri()
         self.username = None
         self.password = None
         self.config = configparser.ConfigParser()
@@ -70,13 +69,16 @@ class Setting:
 
             self.config.write(f)
 
+        self.mongo_uri = uri or self.get_mongo_uri()
+
     def get_mongo_uri(self):
         """
 
         """
         try:
             res = self.config.get('MONGODB', 'uri')
-        except:
+        except Exception as error:
+            print(error)
             res = DEFAULT_DB_URI
         return res
 
@@ -124,5 +126,5 @@ class Setting:
 
 
 SETTING = Setting()
-DATABASE = SETTING.client.quanta
+CLIENT = SETTING.client
 TDX_DIR = SETTING.tdx_dir

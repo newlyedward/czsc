@@ -7626,6 +7626,53 @@ def util_date_stamp(date):
     return date
 
 
+def util_date_str2int(date):
+    """
+    explanation:
+        转换日期字符串为整数
+
+    params:
+        * date->
+            含义: 日期字符串
+            类型: date
+            参数支持: []
+
+    demonstrate:
+        print(util_date_str2int("2011-09-11"))
+
+    return:
+        int
+
+    output:
+        >>20110911
+    """
+    if isinstance(date, str):
+        return int(str().join(date.split('-')))
+    elif isinstance(date, int):
+        return date
+
+
+def util_date_int2str(int_date):
+    """
+    explanation:
+        转换日期整数为字符串
+
+    params:
+        * int_date->
+            含义: 日期转换得
+            类型: int
+            参数支持: []
+
+    return:
+        str
+    """
+    date = str(int_date)
+    if len(date) == 8:
+        return str(date[0:4] + '-' + date[4:6] + '-' + date[6:8])
+    elif len(date) == 10:
+        return date
+
+
 def util_get_real_date(date, trade_list=trade_date_sse, towards=-1):
     """
     explanation:
