@@ -31,6 +31,7 @@ from pandas import DataFrame
 
 from czsc import KlineAnalyze
 from czsc.Data.financial_mean import financial_dict
+from czsc.Utils import util_log_info
 from czsc.Utils.trade_date import util_get_real_date, trade_date_sse, util_date_valid, util_date_stamp, \
     util_date_str2int, util_date_int2str
 
@@ -198,7 +199,7 @@ def fetch_future_day(
         logging.warning('Something wrong with date')
 
 
-def fetch_financial_report(code, report_date, ltype='EN', db=QA_DATABASE):
+def fetch_financial_report(code=None, start=None, end=None, report_date=None, ltype='EN', db=QA_DATABASE):
     """
     获取专业财务报表
     :parmas
@@ -228,44 +229,49 @@ def fetch_financial_report(code, report_date, ltype='EN', db=QA_DATABASE):
     # EN_columns = list(financial_dict.values())
     # EN_columns.extend(['283', '_id', 'code', 'report_date'])
     # EN_columns = pd.Index(EN_columns)
-
+    filter = {}
+    projection = {"_id": 0}
     try:
-        if code is not None and report_date is not None:
-            data = [
-                item for item in collection.find(
-                    {
-                        'code': {
-                            '$in': code
-                        },
-                        'report_date': {
-                            '$in': report_date
-                        }
-                    },
-                    {"_id": 0},
-                    batch_size=10000
-                )
-            ]
-        elif code is None and report_date is not None:
-            data = [
-                item for item in collection.find(
-                    {'report_date': {
-                        '$in': report_date
-                    }},
-                    {"_id": 0},
-                    batch_size=10000
-                )
-            ]
-        elif code is not None and report_date is None:
-            data = [
-                item for item in collection
-                    .find({'code': {
+        if code is not None:
+            filter.update(
+                code={
                     '$in': code
-                }},
-                    {"_id": 0},
-                    batch_size=10000)
-            ]
-        else:
-            data = [item for item in collection.find({}, {"_id": 0})]
+                }
+            )
+
+        if start or end:
+            start = '1990-01-01' if start is None else str(start)[0:10]
+            end = datetime.today().strftime('%Y-%m-%d') if end is None else str(end)[0:10]
+
+            if not util_date_valid(end):
+                util_log_info('Something wrong with end date {}'.format(end))
+                return
+
+            if not util_date_valid(start):
+                util_log_info('Something wrong with end date {}'.format(start))
+                return
+
+            filter.update(
+                report_date={
+                    "$lte": util_date_str2int(end),
+                    "$gte": util_date_str2int(start)
+                }
+            )
+        elif report_date is not None:
+            filter.update(
+                report_date={
+                    '$in': report_date
+                }
+            )
+
+        data = [
+            item for item in collection.find(
+                filter=filter,
+                projection=projection,
+                batch_size=10000
+            )
+        ]
+
         if len(data) > 0:
             res_pd = pd.DataFrame(data)
 
@@ -300,6 +306,7 @@ def fetch_financial_report(code, report_date, ltype='EN', db=QA_DATABASE):
             return None
     except Exception as e:
         raise e
+
 
 def fetch_future_bi_day(
         code,
@@ -471,10 +478,12 @@ def save_future_bi_day(code, collection=FACTOR_DATABASE.future_bi_day):
 
 
 if __name__ == '__main__':
-    code = 'rbl8'
+    # code = 'rbl8'
     # save_future_bi_day('rbl8')
     # df = fetch_future_bi_day('rbl8', start='2020-12-11', limit=4, format='p')
-    fx = fetch_future_bi_day('rbl8', limit=1, format='dict')
-    start = fx[0]['fx_end']
-    bars = fetch_future_day(code, start=start, format='dict')
-    print(bars)
+    # fx = fetch_future_bi_day('rbl8', limit=1, format='dict')
+    # start = fx[0]['fx_end']
+    # bars = fetch_future_day(code, start=start, format='dict')
+    # print(bars)
+
+    df = fetch_financial_report('000001')
