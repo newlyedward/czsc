@@ -223,12 +223,7 @@ def fetch_financial_report(code=None, start=None, end=None, report_date=None, lt
     num_columns = [item[:3] for item in list(financial_dict.keys())]
     CH_columns = [item[3:] for item in list(financial_dict.keys())]
     EN_columns = list(financial_dict.values())
-    # num_columns.extend(['283', '_id', 'code', 'report_date'])
-    # CH_columns.extend(['283', '_id', 'code', 'report_date'])
-    # CH_columns = pd.Index(CH_columns)
-    # EN_columns = list(financial_dict.values())
-    # EN_columns.extend(['283', '_id', 'code', 'report_date'])
-    # EN_columns = pd.Index(EN_columns)
+
     filter = {}
     projection = {"_id": 0}
     try:
@@ -300,7 +295,7 @@ def fetch_financial_report(code=None, start=None, end=None, report_date=None, lt
                                   numpy.nan).set_index(
                 ['report_date',
                  'code'],
-                drop=False
+                # drop=False
             )
         else:
             return None
