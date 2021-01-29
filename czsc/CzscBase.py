@@ -846,8 +846,8 @@ class CzscMongo(CzscBase):
         chart = kline_pro(
             kline=self._bars, fx=self._fx_list,
             bs=self._sig_list, xd=self._xd_list,
-            # title=self.code, width='1520px', height='580px'
-            title=self.code, width='2540px', height='850px'
+            title=self.code, width='1520px', height='580px'
+            # title=self.code, width='2540px', height='850px'
         )
 
         if not chart_path:
@@ -1336,13 +1336,25 @@ def main_consumer():
 
 def main_signal():
     from czsc.Fetch.tdx import SECURITY_DATAFRAME
+
+    def inst_filter(security):
+        if security['instrument'] not in ['future', 'ETF', 'stock']:
+            return False
+
+        if security['exchange'] in [ 'sse', 'szse', 'hkconnect']:
+            return True
+
+        if security['exchange'] in ['czce', 'dce', 'shfe', 'cffex']:
+            code = security.name
+            if code[-2:] in ['L8', 'L9']:
+                return True
+
+        return False
+
     security_df = SECURITY_DATAFRAME[
-        SECURITY_DATAFRAME.apply(
-            lambda security: security['instrument'] in ['future', 'ETF', 'stock']
-                             and security['exchange'] in ['czce', 'dce', 'shfe', 'cffex', 'sse', 'szse', 'hkconnect'],
-            axis=1
-        )
+        SECURITY_DATAFRAME.apply(inst_filter, axis=1)
     ]
+
     sig_list = []
     for code, item in security_df.iterrows():
         util_log_info("============={} {} Signal==========".format(code, item['exchange']))
@@ -1363,7 +1375,7 @@ def main_signal():
 
 
 def main_single():
-    czsc_mongo = CzscMongo(code='pfl8', freq='day', exchange='szse')
+    czsc_mongo = CzscMongo(code='06886', freq='day', exchange='hkconnect')
     czsc_mongo.run()
     czsc_mongo.draw()
     czsc_mongo.to_csv()
@@ -1371,5 +1383,5 @@ def main_single():
 
 if __name__ == '__main__':
     # main_consumer()
-    # main_signal()
-    main_single()
+    main_signal()
+    # main_single()
