@@ -138,12 +138,100 @@ class FinancialStruct:
 
         return self.factor['netProfitMargin']
 
+    @property
+    def netProfitCashRatio(self):
+        """
+        净利润现金比率=经营现金流量净额 /净利润
+        """
+        if 'netProfitMargin' not in self.factor.columns:
+            df = self.ttm_data
+            self.factor['netProfitCashRatio'] = df['netCashFlowsFromOperatingActivities'] / df['netProfit']
+
+        return self.factor['netProfitCashRatio']
+
+    @property
+    def operatingIncomeGrowth(self):
+        """
+        净利润现金比率=经营现金流量净额 /净利润
+        """
+        if 'netProfitMargin' not in self.factor.columns:
+            df = self.ttm_data
+            # ttm的同比数据，平滑季节性因素
+            self.factor['operatingIncomeGrowth'] = df['operatingRevenue'] / df['operatingRevenue'].shift(4)
+
+        return self.factor['operatingIncomeGrowth']
+
+    @property
+    def continuedProfitGrowth(self):
+        """
+        扣非净利润=净利润 - 非经常性损益
+        非经常性损益 = 投资收益、公允价值变动损益、以及营业外收入和支出。
+        """
+        if 'netProfitMargin' not in self.factor.columns:
+            df = self.ttm_data
+            # ttm的同比数据，平滑季节性因素
+            self.factor['continuedProfitGrowth'] = df['operatingRevenue'] / df['operatingRevenue'].shift(4)
+
+        return self.factor['continuedProfitGrowth']
+
+    @property
+    def assetsLiabilitiesRatio(self):
+        """
+        直接使用TDX数据
+        资产负债率
+        """
+        if 'assetsLiabilitiesRatio' not in self.factor.columns:
+            df = self.data
+            self.factor['assetsLiabilitiesRatio'] = df['assetsLiabilitiesRatio']
+
+        return self.factor['assetsLiabilitiesRatio']
+
+    @property
+    def inventoryRatio(self):
+        """
+        直接使用TDX数据
+        存货比率 = 库存/流动资产
+        """
+        if 'inventoryRatio' not in self.factor.columns:
+            df = self.data
+            # ttm的同比数据，平滑季节性因素
+            self.factor['inventoryRatio'] = df['inventoryRatio']
+
+        return self.factor['inventoryRatio']
+
+    @property
+    def interestCoverageRatio(self):
+        """
+        直接使用TDX数据
+        利息保障倍数 = (利润总额+财务费用（仅指利息费用部份）)/利息费用
+        利息保障倍数=EBIT/利息费用
+        分母：“利息费用”：我国的会计实务中将利息费用计入财务费用,并不单独记录，所以作为外部使用者通常得不到准确的利息费用的数据，
+        分析人员通常用财务费用代替利息费用进行计算，所以存在误差。
+        """
+        if 'interestCoverageRatio' not in self.factor.columns:
+            df = self.data
+            self.factor['interestCoverageRatio'] = df['interestCoverageRatio']
+
+        return self.factor['interestCoverageRatio']
+
+    @property
+    def cashRatio(self):
+        """
+        直接使用TDX数据
+        现金比率 = (货币资金+有价证券)÷流动负债
+        """
+        if 'cashRatio' not in self.factor.columns:
+            df = self.data
+            self.factor['cashRatio'] = df['cashRatio']
+
+        return self.factor['cashRatio']
+
 
 if __name__ == '__main__':
     from czsc.Fetch.mongo import fetch_financial_report
-    code = '000001'
+    code = '300327'
     df = fetch_financial_report(code, start='2015-01-01')
     findata = FinancialStruct(df)
     # findata.data.to_csv("{} finance.csv".format(code))
-    # findata.ttm_data
-    print(findata.netProfitMargin)
+    # findata.ttm_data.to_csv("{} ttm finance.csv".format(code))
+    print(findata.operatingIncomeGrowth)

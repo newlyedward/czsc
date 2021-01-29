@@ -220,7 +220,7 @@ financial_dict = {
     '188投资收益增长率(%)': 'investmentIncomeGrowthRate',
     '189营业利润增长率(%)': 'operatingProfitGrowthRate',
     '190暂无': 'None1',
-    '191暂无': 'None2',
+    '191扣非净利润同比(%)': 'None2',
     '192暂无': 'None3',
     # 8. 获利能力分析
     '193成本费用利润率(%)': 'rateOfReturnOnCost',
