@@ -41,12 +41,21 @@ class FinancialStruct:
         # keys for CN, values for EN
         self.colunms_en = list(financial_dict.values())
         self.colunms_cn = list(financial_dict.keys())
+        self.init_factor()
 
     def __repr__(self):
         return '< Financial_Struct >'
 
     def __call__(self, *args, **kwargs):
         return self.data
+
+    def init_factor(self):
+        factors = ['ROIC', 'grossProfitMargin', 'netProfitMargin', 'netProfitCashRatio',
+                   'operatingIncomeGrowth', 'continuedProfitGrowth',
+                   'assetsLiabilitiesRatio', 'interestCoverageRatio', 'cashRatio', 'inventoryRatio']
+
+        for factor in factors:
+            eval('self.{}'.format(factor))
 
     def get_report_by_date(self, code, date):
         return self.data.loc[pd.Timestamp(date), code]
@@ -94,8 +103,6 @@ class FinancialStruct:
 
         return ttm_data
 
-
-
     @property
     def ROIC(self):
         """
@@ -112,7 +119,7 @@ class FinancialStruct:
                                       + df['noncurrentLiabilitiesDueWithinOneYear']
             IC = liability_with_interest + df['totalOwnersEquity']
             ROIC = NOPLAT / IC
-            self.factor['ROIC'] = ROIC
+            self.factor['ROIC'] = ROIC * 100
 
         return self.factor['ROIC']
 
@@ -123,7 +130,8 @@ class FinancialStruct:
         """
         if 'rateOfReturnOnGrossProfitFromSales' not in self.factor.columns:
             df = self.ttm_data
-            self.factor['grossProfitMargin'] = (df['operatingRevenue'] - df['operatingCosts']) / df['operatingRevenue']
+            self.factor['grossProfitMargin'] = (df['operatingRevenue'] - df['operatingCosts']) \
+                                               / df['operatingRevenue'] * 100
 
         return self.factor['grossProfitMargin']
 
@@ -134,7 +142,7 @@ class FinancialStruct:
         """
         if 'netProfitMargin' not in self.factor.columns:
             df = self.ttm_data
-            self.factor['netProfitMargin'] = df['netProfit'] / df['operatingRevenue']
+            self.factor['netProfitMargin'] = df['netProfit'] / df['operatingRevenue'] * 100
 
         return self.factor['netProfitMargin']
 
@@ -143,9 +151,9 @@ class FinancialStruct:
         """
         净利润现金比率=经营现金流量净额 /净利润
         """
-        if 'netProfitMargin' not in self.factor.columns:
+        if 'netProfitCashRatio' not in self.factor.columns:
             df = self.ttm_data
-            self.factor['netProfitCashRatio'] = df['netCashFlowsFromOperatingActivities'] / df['netProfit']
+            self.factor['netProfitCashRatio'] = df['netCashFlowsFromOperatingActivities'] / df['netProfit'] * 100
 
         return self.factor['netProfitCashRatio']
 
@@ -154,10 +162,10 @@ class FinancialStruct:
         """
         净利润现金比率=经营现金流量净额 /净利润
         """
-        if 'netProfitMargin' not in self.factor.columns:
+        if 'operatingIncomeGrowth' not in self.factor.columns:
             df = self.ttm_data
             # ttm的同比数据，平滑季节性因素
-            self.factor['operatingIncomeGrowth'] = df['operatingRevenue'] / df['operatingRevenue'].shift(4)
+            self.factor['operatingIncomeGrowth'] = df['operatingRevenue'] / df['operatingRevenue'].shift(4) * 100 - 100
 
         return self.factor['operatingIncomeGrowth']
 
@@ -167,10 +175,10 @@ class FinancialStruct:
         扣非净利润=净利润 - 非经常性损益
         非经常性损益 = 投资收益、公允价值变动损益、以及营业外收入和支出。
         """
-        if 'netProfitMargin' not in self.factor.columns:
+        if 'continuedProfitGrowth' not in self.factor.columns:
             df = self.ttm_data
             # ttm的同比数据，平滑季节性因素
-            self.factor['continuedProfitGrowth'] = df['operatingRevenue'] / df['operatingRevenue'].shift(4)
+            self.factor['continuedProfitGrowth'] = df['operatingRevenue'] / df['operatingRevenue'].shift(4) * 100 - 100
 
         return self.factor['continuedProfitGrowth']
 
@@ -229,6 +237,7 @@ class FinancialStruct:
 
 if __name__ == '__main__':
     from czsc.Fetch.mongo import fetch_financial_report
+
     code = '300327'
     df = fetch_financial_report(code, start='2015-01-01')
     findata = FinancialStruct(df)
