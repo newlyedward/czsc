@@ -269,6 +269,7 @@ def get_bar(code, start=None, end=None, freq='day', exchange=None):
         return
 
     if not os.path.exists(file_path):
+        util_log_info('=={}== {} file is not exists!'.format(code, file_path))
         return
 
     # 统一freq的数据结构
