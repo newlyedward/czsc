@@ -1,7 +1,5 @@
 # coding: utf-8
 
-from .analyze import KlineAnalyze
-from .signals import KlineSignals
 from .Utils.ta import SMA, EMA, MACD, KDJ
 
 __version__ = "0.5.9"

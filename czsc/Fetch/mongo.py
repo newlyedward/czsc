@@ -29,7 +29,6 @@ import pandas as pd
 import pymongo
 from pandas import DataFrame
 
-from czsc import KlineAnalyze
 from czsc.Data.financial_mean import financial_dict
 from czsc.Utils import util_log_info
 from czsc.Utils.trade_date import util_get_real_date, trade_date_sse, util_date_valid, util_date_stamp, \

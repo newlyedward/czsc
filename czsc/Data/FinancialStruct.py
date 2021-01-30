@@ -28,6 +28,7 @@
 from datetime import datetime
 
 import pandas as pd
+import numpy as np
 
 from czsc.Data.financial_mean import financial_dict
 
@@ -50,6 +51,7 @@ class FinancialStruct:
         return self.data
 
     def init_factor(self):
+        # factors = ['ROIC']
         factors = ['ROIC', 'grossProfitMargin', 'netProfitMargin', 'netProfitCashRatio',
                    'operatingIncomeGrowth', 'continuedProfitGrowth',
                    'assetsLiabilitiesRatio', 'interestCoverageRatio', 'cashRatio', 'inventoryRatio']
@@ -128,10 +130,12 @@ class FinancialStruct:
         """
         毛利率=毛利/营业收入×100%=（主营业务收入-主营业务成本）/主营业务收入×100%。
         """
-        if 'rateOfReturnOnGrossProfitFromSales' not in self.factor.columns:
-            df = self.ttm_data
-            self.factor['grossProfitMargin'] = (df['operatingRevenue'] - df['operatingCosts']) \
-                                               / df['operatingRevenue'] * 100
+        if 'grossProfitMargin' not in self.factor.columns:
+            df = self.data
+            # df = self.ttm_data
+            # self.factor['grossProfitMargin'] = (df['operatingRevenue'] - df['operatingCosts']) \
+            #                                    / df['operatingRevenue'] * 100
+            self.factor['grossProfitMargin'] = df['rateOfReturnOnGrossProfitFromSales']
 
         return self.factor['grossProfitMargin']
 
@@ -141,31 +145,36 @@ class FinancialStruct:
         净利润率=净利润/营业收入×100%
         """
         if 'netProfitMargin' not in self.factor.columns:
-            df = self.ttm_data
-            self.factor['netProfitMargin'] = df['netProfit'] / df['operatingRevenue'] * 100
-
+            # df = self.ttm_data
+            # self.factor['netProfitMargin'] = df['netProfit'] / df['operatingRevenue'] * 100
+            df = self.data
+            self.factor['netProfitMargin'] = df['rateOfReturnOnNetSalesProfit']
         return self.factor['netProfitMargin']
 
     @property
     def netProfitCashRatio(self):
         """
+        直接使用TDX数据
         净利润现金比率=经营现金流量净额 /净利润
         """
         if 'netProfitCashRatio' not in self.factor.columns:
-            df = self.ttm_data
-            self.factor['netProfitCashRatio'] = df['netCashFlowsFromOperatingActivities'] / df['netProfit'] * 100
+            df = self.data
+            self.factor['netProfitCashRatio'] = df['cashFlowRateAndNetProfitRatioOfOperatingActivities']
 
         return self.factor['netProfitCashRatio']
 
     @property
     def operatingIncomeGrowth(self):
         """
-        净利润现金比率=经营现金流量净额 /净利润
+        直接使用TDX数据
+        营收增长
         """
         if 'operatingIncomeGrowth' not in self.factor.columns:
-            df = self.ttm_data
-            # ttm的同比数据，平滑季节性因素
-            self.factor['operatingIncomeGrowth'] = df['operatingRevenue'] / df['operatingRevenue'].shift(4) * 100 - 100
+            df = self.data
+            # df = self.ttm_data
+            # # ttm的同比数据，平滑季节性因素
+            # self.factor['operatingIncomeGrowth'] = df['operatingRevenue'] / df['operatingRevenue'].shift(4) * 100 - 100
+            self.factor['operatingIncomeGrowth'] = df['operatingIncomeGrowth']
 
         return self.factor['operatingIncomeGrowth']
 
