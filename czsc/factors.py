@@ -46,6 +46,19 @@ presentation_dict = {
     'inventoryRatio': '存货比率',
 }
 
+threshold_dict = {
+    'ROIC': 6,
+    'grossProfitMargin': 30,
+    'netProfitMargin': 15,
+    'netProfitCashRatio': 60,
+    'operatingIncomeGrowth': 15,
+    'continuedProfitGrowth': 15,
+    'assetsLiabilitiesRatio': 60,
+    'interestCoverageRatio': [0, 1],
+    'cashRatio': 20,
+    'inventoryRatio': 50,
+}
+
 
 def table_plot(data, columns=None, title=''):
     etable = Table()
@@ -72,7 +85,7 @@ def table_plot(data, columns=None, title=''):
 
 if __name__ == '__main__':
     from czsc.Fetch.mongo import fetch_financial_report
-    code = '300327'
+    code = '002128'
     # df = fetch_financial_report(code, start='2015-01-01')
     df = fetch_financial_report(code)
     findata = FinancialStruct(df)
