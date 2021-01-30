@@ -47,7 +47,7 @@ def save_financial_files():
     coll.create_index(
         [("code", ASCENDING), ("report_date", ASCENDING)], unique=True)
 
-    pattern = "^(gpcw)(?P<date>\d{8})\.dat"    # gpcw20210930.dat
+    pattern = "^(gpcw)(?P<date>\d{8})\.zip"  # gpcw20210930.dat
     for filename in os.listdir(_CW_DIR):
         try:
             date = int(re.match(pattern, filename).groupdict()['date'])
@@ -55,7 +55,7 @@ def save_financial_files():
             continue
 
         util_log_info('NOW SAVING {}'.format(date))
-        util_log_info('在数据库中的条数 {}'.format(coll.find({'report_date': date}).count()))
+        util_log_info('在数据库中的条数 {}'.format(coll.count_documents({'report_date': date})))
         try:
             filename = os.path.join(_CW_DIR, filename)
             df = HistoryFinancialReader().get_df(filename)
