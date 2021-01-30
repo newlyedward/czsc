@@ -51,10 +51,10 @@ threshold_dict = {
     'grossProfitMargin': 30,
     'netProfitMargin': 15,
     'netProfitCashRatio': 60,
-    'operatingIncomeGrowth': 0,
-    'continuedProfitGrowth': 0,
+    'operatingIncomeGrowth': 10,
+    'continuedProfitGrowth': 10,
     'assetsLiabilitiesRatio': 60,
-    'interestCoverageRatio': [0, 1],
+    'interestCoverageRatio': [0, 100],
     'cashRatio': 20,
     'inventoryRatio': 50,
 }
@@ -85,7 +85,7 @@ def table_plot(data, columns=None, title=''):
 
 if __name__ == '__main__':
     from czsc.Fetch.mongo import fetch_financial_report
-    code = '000036'
+    code = '002782'
     today = datetime.today()
     year = today.year - 4
     start = datetime(year, today.month, today.day).strftime('%Y-%m-%d')

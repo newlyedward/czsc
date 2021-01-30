@@ -258,11 +258,14 @@ def fetch_financial_report(code=None, start=None, end=None, report_date=None, lt
                 }
             )
 
+        collection.create_index([('report_date', -1), ('code', 1)])
+
         data = [
             item for item in collection.find(
                 filter=filter,
                 projection=projection,
-                batch_size=10000
+                batch_size=10000,
+                # sort=[('report_date', -1)]
             )
         ]
 

@@ -7,6 +7,7 @@ from datetime import datetime
 from czsc.Data.FinancialStruct import FinancialStruct
 from czsc.Fetch.mongo import fetch_financial_report
 from czsc.factors import threshold_dict
+from czsc.Utils import util_log_info
 
 
 def get_financial_scores():
@@ -16,13 +17,15 @@ def get_financial_scores():
     start = datetime(year, today.month, today.day).strftime('%Y-%m-%d')
     total_reports_df = fetch_financial_report(start=start)
     code_list = total_reports_df.index.get_level_values(level=1).drop_duplicates()
-    scores = pd.Series(index=code_list, dtype='float16')
+    scores = pd.Series(index=code_list, dtype='float16', name='score')
 
     for code in code_list:
         try:
             df = total_reports_df.loc[(slice(None), code), :]
         except:
             continue
+
+        util_log_info("Calculate {} financial scores!".format(code))
 
         findata = FinancialStruct(df)
         length = min(len(df), 12)
@@ -33,24 +36,33 @@ def get_financial_scores():
         weight.index = factor.index
 
         score_df = pd.DataFrame(index=factor.index, columns=factor.columns)
-        score_df['ROIC'] = np.sign(factor['ROIC'] - threshold_dict['ROIC'])
-        score_df['grossProfitMargin'] = np.sign(factor['grossProfitMargin'] - threshold_dict['grossProfitMargin'])
-        score_df['netProfitMargin'] = np.sign(factor['netProfitMargin'] - threshold_dict['netProfitMargin'])
-        score_df['netProfitCashRatio'] = np.sign(factor['netProfitCashRatio'] - threshold_dict['netProfitCashRatio'])
-        score_df['operatingIncomeGrowth'] \
-            = np.sign(factor['operatingIncomeGrowth'] - threshold_dict['operatingIncomeGrowth'])
-        score_df['continuedProfitGrowth'] \
-            = np.sign(factor['continuedProfitGrowth'] - threshold_dict['continuedProfitGrowth'])
 
-        score_df['assetsLiabilitiesRatio'] = score_df['assetsLiabilitiesRatio'].apply(
+        score_df['ROIC'] = factor['ROIC'].apply(
+            lambda x: 1 if x > threshold_dict['ROIC'] else 0 if x > 0 else -1)
+        score_df['grossProfitMargin'] = factor['grossProfitMargin'].apply(
+            lambda x: 1 if x > threshold_dict['grossProfitMargin'] else 0 if x > 0 else -1)
+        score_df['netProfitMargin'] = factor['netProfitMargin'].apply(
+            lambda x: 1 if x > threshold_dict['netProfitMargin'] else 0 if x > 0 else -1)
+        score_df['netProfitCashRatio'] = factor['netProfitCashRatio'].apply(
+            lambda x: 1 if x > threshold_dict['netProfitCashRatio'] else 0 if x > 0 else -1)
+
+        score_df['operatingIncomeGrowth'] = factor['operatingIncomeGrowth'].apply(
+            lambda x: 1 if x > threshold_dict['operatingIncomeGrowth'] else 0 if x > 0
+            else -1 if x > -threshold_dict['operatingIncomeGrowth'] else -2)
+        score_df['continuedProfitGrowth'] = factor['continuedProfitGrowth'].apply(
+            lambda x: 1 if x > threshold_dict['continuedProfitGrowth'] else 0 if x > 0
+            else -1 if x > -threshold_dict['continuedProfitGrowth'] else -2)
+
+        score_df['assetsLiabilitiesRatio'] = factor['assetsLiabilitiesRatio'].apply(
             lambda x: 1 if x < threshold_dict['assetsLiabilitiesRatio'] else 0)
-        score_df['cashRatio'] = score_df['cashRatio'].apply(
+        score_df['cashRatio'] = factor['cashRatio'].apply(
             lambda x: 1 if x > threshold_dict['cashRatio'] else 0)
-        score_df['inventoryRatio'] = score_df['inventoryRatio'].apply(
+        score_df['inventoryRatio'] = factor['inventoryRatio'].apply(
             lambda x: 1 if x < threshold_dict['inventoryRatio'] else 0)
-        score_df['interestCoverageRatio'] = score_df['interestCoverageRatio'].apply(
-            lambda x: 0 if threshold_dict['interestCoverageRatio'][0] < x \
-                           < threshold_dict['interestCoverageRatio'][1] else 1)
+        # 小于0取正值会有问题，一般情况影响不大
+        score_df['interestCoverageRatio'] = factor['interestCoverageRatio'].apply(
+            lambda x: 0 if (threshold_dict['interestCoverageRatio'][0] < x
+                           < threshold_dict['interestCoverageRatio'][1]) else 1)
 
         scores[code] = (score_df.T * weight).sum().sum()
 
@@ -59,3 +71,4 @@ def get_financial_scores():
 
 if __name__ == '__main__':
     scores = get_financial_scores()
+    scores.to_csv('scores.csv')
