@@ -85,9 +85,12 @@ def table_plot(data, columns=None, title=''):
 
 if __name__ == '__main__':
     from czsc.Fetch.mongo import fetch_financial_report
-    code = '002128'
-    # df = fetch_financial_report(code, start='2015-01-01')
-    df = fetch_financial_report(code)
+    code = '601028'
+    today = datetime.today()
+    year = today.year - 2
+    start = datetime(year, today.month, today.day).strftime('%Y-%m-%d')
+    df = fetch_financial_report(code, start=start)
+    # df = fetch_financial_report(code)
     findata = FinancialStruct(df)
     table = table_plot(findata.factor, title=code)
     # findata.data.to_csv("{} finance.csv".format(code))

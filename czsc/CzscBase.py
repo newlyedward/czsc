@@ -32,14 +32,16 @@ import pymongo
 
 from czsc.ClPubSub.consumer import Subscriber
 from czsc.ClPubSub.producer import Publisher
+from czsc.Data.FinancialStruct import FinancialStruct
 
-from czsc.Fetch.mongo import FACTOR_DATABASE, fetch_future_bi_day
+from czsc.Fetch.mongo import FACTOR_DATABASE, fetch_future_bi_day, fetch_financial_report
 from czsc.Fetch.tdx import get_bar
 from czsc.ClEngine.ClThread import ClThread
 from czsc.Utils.echarts_plot import kline_pro
 from czsc.Utils.logs import util_log_info
 from czsc.Utils.trade_date import util_get_next_day, util_get_trade_gap
 from czsc.Utils.transformer import DataEncoder
+from czsc.factors import threshold_dict
 
 
 class ClSimBar(ClThread):
@@ -1341,11 +1343,66 @@ def main_signal():
         if security['instrument'] not in ['future', 'ETF', 'stock']:
             return False
 
-        if security['exchange'] in [ 'sse', 'szse', 'hkconnect']:
+        if security['exchange'] in ['hkconnect']:
+            return True
+
+        code = security.name
+        today = datetime.date.today()
+        year = today.year - 2
+        start = datetime.date(year, today.month, today.day).strftime('%Y-%m-%d')
+        if security['exchange'] in ['sse', 'szse']:
+            if security['instrument'] not in ['stock']:
+                return True
+
+            df = fetch_financial_report(code, start=start)
+            try:
+                findata = FinancialStruct(df)
+            except:
+                util_log_info("Cant get {} financial data, maybe not list in market".format(code))
+                return False
+
+            # B 股，2，9开头的剔除掉
+            factor = findata.factor
+            # 营业收入＜1亿
+            if df.iloc[-1]['operatingRevenue']< 100000000:
+                return False
+
+            last_factor = factor.iloc[-1]
+            if last_factor['ROIC'] < threshold_dict['ROIC']:
+                return False
+
+            if last_factor['grossProfitMargin'] < threshold_dict['grossProfitMargin']:
+                return False
+
+            if last_factor['netProfitMargin'] < threshold_dict['netProfitMargin']:
+                return False
+
+            if last_factor['netProfitCashRatio'] < threshold_dict['netProfitCashRatio']:
+                return False
+
+            if last_factor['operatingIncomeGrowth'] < threshold_dict['operatingIncomeGrowth']:
+                return False
+
+            if last_factor['continuedProfitGrowth'] < threshold_dict['continuedProfitGrowth']:
+                return False
+
+            if last_factor['assetsLiabilitiesRatio'] > threshold_dict['assetsLiabilitiesRatio']:
+                return False
+
+            # 以下三个指标不适用金融和地产行业
+            if last_factor['cashRatio'] < threshold_dict['cashRatio']:
+                return False
+
+            if last_factor['inventoryRatio'] > threshold_dict['inventoryRatio']:
+                return False
+
+            if threshold_dict['interestCoverageRatio'][0] \
+                    < last_factor['interestCoverageRatio'] < threshold_dict['interestCoverageRatio'][1]:
+                return False
+
             return True
 
         if security['exchange'] in ['czce', 'dce', 'shfe', 'cffex']:
-            code = security.name
             if code[-2:] in ['L8', 'L9']:
                 return True
 
@@ -1375,7 +1432,7 @@ def main_signal():
 
 
 def main_single():
-    czsc_mongo = CzscMongo(code='06886', freq='day', exchange='hkconnect')
+    czsc_mongo = CzscMongo(code='pfl8', freq='day', exchange='szse')
     czsc_mongo.run()
     czsc_mongo.draw()
     czsc_mongo.to_csv()

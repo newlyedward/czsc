@@ -172,13 +172,14 @@ class FinancialStruct:
     @property
     def continuedProfitGrowth(self):
         """
+        扣非数据计算复杂，直接使用TDX数据
         扣非净利润=净利润 - 非经常性损益
         非经常性损益 = 投资收益、公允价值变动损益、以及营业外收入和支出。
+
         """
         if 'continuedProfitGrowth' not in self.factor.columns:
-            df = self.ttm_data
-            # ttm的同比数据，平滑季节性因素
-            self.factor['continuedProfitGrowth'] = df['operatingRevenue'] / df['operatingRevenue'].shift(4) * 100 - 100
+            df = self.data
+            self.factor['continuedProfitGrowth'] = df['continuedProfitGrowthRate']
 
         return self.factor['continuedProfitGrowth']
 
