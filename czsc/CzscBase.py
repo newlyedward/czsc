@@ -42,6 +42,7 @@ from czsc.Utils.logs import util_log_info
 from czsc.Utils.trade_date import util_get_next_day, util_get_trade_gap
 from czsc.Utils.transformer import DataEncoder
 from czsc.factors import threshold_dict
+from czsc.Indicator import BOLL
 
 
 class ClSimBar(ClThread):
@@ -476,7 +477,7 @@ class XdList(object):
                     return True
         return False
 
-    def update_sig(self, trade_date):
+    def update_sig(self, bars):
         """
         线段更新后调用，判断是否出现买点
         """
@@ -491,8 +492,10 @@ class XdList(object):
         # else:
         #     last_zs = None
 
+        boll = BOLL(bars)
+
         sig = {
-            'date': trade_date[-1],
+            'date': bars[-1]['date'],
             'real_loc': zs['real_loc'],
             'location': zs['location'],
             'weight': zs['weight'],
@@ -503,6 +506,7 @@ class XdList(object):
         }
 
         if xd['fx_mark'] > 0:  # 上升趋势
+            sig.update(boll=boll['UB'], price=bars[-1]['high'])
             if xd['value'] > zs['GG'][-1]['value']:
                 xd_mark = -1  # 如果weight=1, 背驰，有可能1卖
                 resistance = np.nan
@@ -525,6 +529,7 @@ class XdList(object):
                 support = np.nan
 
         elif xd['fx_mark'] < 0:  # 下降趋势
+            sig.update(boll=boll['LB'], price=bars[-1]['low'])
             if xd['value'] > zs['GG'][-1]['value']:
                 xd_mark = 4  # 三买
                 resistance = np.nan
@@ -807,7 +812,7 @@ class CzscBase:
             xd_list.update_zs()
 
             # 计算对应买卖点
-            xd_list.update_sig(trade_date=self._trade_date)
+            xd_list.update_sig(bars=self._bars)
 
             result = xd_list.update_xd(trade_date=self._trade_date)
             temp_list = xd_list
@@ -1432,7 +1437,7 @@ def main_signal():
 
 
 def main_single():
-    czsc_mongo = CzscMongo(code='000338', freq='day', exchange='szse')
+    czsc_mongo = CzscMongo(code='srl8', freq='day', exchange='czce')
     czsc_mongo.run()
     czsc_mongo.draw()
     czsc_mongo.to_csv()
