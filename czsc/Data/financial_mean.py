@@ -298,7 +298,7 @@ financial_dict = {
     '260财务公司机构数': 'financialCompanyNumber',
     '261财务公司持股量': 'financialCompanyShareholding',
     '262年金机构数': 'pensionInsuranceAgencyNumber',
-    '263年金持股量': 'pensionInsuranceAgencyShareholfing',
+    '263年金持股量': 'pensionInsuranceAgencyShareholding',
     # 14.新增指标
     # [注：季度报告中，若股东同时持有非流通A股性质的股份(如同时持有流通A股和流通B股），取的是包含同时持有非流通A股性质的流通股数]
     '264十大流通股东中持有A股合计(股)': 'totalNumberOfTopTenCirculationShareholders',

@@ -1362,7 +1362,7 @@ def main_signal():
                 return False
 
             # B 股，2，9开头的剔除掉
-            factor = findata.factor
+            factor = findata.financial_factor
             # 营业收入＜1亿
             if df.iloc[-1]['operatingRevenue']< 100000000:
                 return False
@@ -1432,7 +1432,7 @@ def main_signal():
 
 
 def main_single():
-    czsc_mongo = CzscMongo(code='pfl8', freq='day', exchange='szse')
+    czsc_mongo = CzscMongo(code='000338', freq='day', exchange='szse')
     czsc_mongo.run()
     czsc_mongo.draw()
     czsc_mongo.to_csv()
@@ -1440,5 +1440,5 @@ def main_single():
 
 if __name__ == '__main__':
     # main_consumer()
-    main_signal()
-    # main_single()
+    # main_signal()
+    main_single()

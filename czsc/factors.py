@@ -92,7 +92,7 @@ if __name__ == '__main__':
     df = fetch_financial_report(code, start=start)
     # df = fetch_financial_report(code)
     findata = FinancialStruct(df)
-    table = table_plot(findata.factor, title=code)
+    table = table_plot(findata.financial_factor, title=code)
     # findata.data.to_csv("{} finance.csv".format(code))
     # findata.ttm_data.to_csv("{} ttm finance.csv".format(code))
     table_path = '{}_factor.html'.format(code)
