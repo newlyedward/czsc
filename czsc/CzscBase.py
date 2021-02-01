@@ -501,12 +501,12 @@ class XdList(object):
             'weight': zs['weight'],
             'fx_mark': xd['fx_mark'],
             'last_mark': last_xd['fx_mark'],
-            'time_ratio': xd['fx_mark'] / last_xd['fx_mark'],
-            'pct_change': xd['pct_change'],
+            'time_ratio': abs(xd['fx_mark'] / last_xd['fx_mark']) * 100,
+            'pct_change': xd['pct_change'] * 100,
         }
 
         if xd['fx_mark'] > 0:  # 上升趋势
-            sig.update(boll=boll['UB'], price=bars[-1]['high'])
+            sig.update(boll=boll['UB'] / bars[-1]['high'] * 100 - 100)
             if xd['value'] > zs['GG'][-1]['value']:
                 xd_mark = -1  # 如果weight=1, 背驰，有可能1卖
                 resistance = np.nan
@@ -529,7 +529,7 @@ class XdList(object):
                 support = np.nan
 
         elif xd['fx_mark'] < 0:  # 下降趋势
-            sig.update(boll=boll['LB'], price=bars[-1]['low'])
+            sig.update(boll=100 - boll['LB'] / bars[-1]['low'] * 100)
             if xd['value'] > zs['GG'][-1]['value']:
                 xd_mark = 4  # 三买
                 resistance = np.nan
@@ -553,7 +553,7 @@ class XdList(object):
         else:
             raise ValueError
 
-        sig.update(xd_mark=xd_mark, support=support, resistance=resistance)
+        sig.update(xd_mark=xd_mark, support=support * 100, resistance=resistance * 100)
         self.sig_list.append(sig)
 
 
@@ -1437,7 +1437,7 @@ def main_signal():
 
 
 def main_single():
-    czsc_mongo = CzscMongo(code='srl8', freq='day', exchange='czce')
+    czsc_mongo = CzscMongo(code='apl8', freq='day', exchange='hkconnect')
     czsc_mongo.run()
     czsc_mongo.draw()
     czsc_mongo.to_csv()
