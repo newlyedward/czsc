@@ -25,9 +25,21 @@
 import pandas as pd
 
 
-def MA(Series, N):
-    return pd.Series.rolling(Series, N).mean()
+def sma(N, M):
+    """
+    简单移动平均 X的N日移动平均,M为权重,如Y=(X*M+Y'*(N-M))/N
+    """
+
+    def inner(x, y):
+        return (x * M + y * (N - M)) / N
+
+    return inner
 
 
-def STD(Series, N):
-    return pd.Series.rolling(Series, N).std()
+def ema(N):
+
+    def inner(x, y):
+        func = sma(N + 1, 2)
+        return func(x, y)
+
+    return inner
