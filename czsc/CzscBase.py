@@ -206,7 +206,12 @@ def update_fx(bars, new_bars: list, fx_list: list, trade_date: list):
 class XdList(object):
     """存放线段"""
 
-    def __init__(self):
+    def __init__(self, bars, indicators, trade_date):
+        # 传入的是地址，不要修改
+        self.bars = bars
+        self.indicators = indicators
+        self.trade_date = trade_date
+
         # item存放数据元素
         self.xd_list = []  # 否则指向同一个地址
         # 低级别的中枢
@@ -342,14 +347,15 @@ class XdList(object):
 
         return False
 
-    def update_xd_eigenvalue(self, trade_date: list):
+    def update_xd_eigenvalue(self):
+        trade_date = self.trade_date
         xd = self.xd_list[-1]
         last_xd = self.xd_list[-2]
         xd.update(pct_change=(xd['value'] - last_xd['value']) / last_xd['value'])
         kn = trade_date.index(xd['date']) - trade_date.index(last_xd['date']) + 1
         xd.update(fx_mark=kn * np.sign(xd.get('fx_mark', xd.get('direction', 0))))
 
-    def update_xd(self, trade_date: list):
+    def update_xd(self):
         """更新笔分型序列
         分型记对象样例：
          {
@@ -370,7 +376,7 @@ class XdList(object):
         """
         # 至少3根同类型分型才可能出现线段，最后1根bi不确定，因此最后一段也不确定
         if self.next is None:
-            self.next = XdList()
+            self.next = XdList(self.bars, self.indicators, self.trade_date)
 
         bi_list = self.xd_list
         xd_list = self.next
@@ -389,7 +395,7 @@ class XdList(object):
                 xd_list.append(bi_list[-1])
                 xd_list.append(bi_list[0])
 
-            xd_list.update_xd_eigenvalue(trade_date)
+            xd_list.update_xd_eigenvalue()
             return True
 
         bi3 = bi_list[-3]
@@ -400,7 +406,7 @@ class XdList(object):
         # 非分型结尾段，直接替换成分型, 没有新增段，后续不需要处理，同一个端点确认
         if 'direction' in last_xd or xd['date'] == last_xd['date']:
             xd_list[-1] = xd  # 日期相等的情况是否已经在内存中修改过了？
-            xd_list.update_xd_eigenvalue(trade_date)
+            xd_list.update_xd_eigenvalue()
             return True
 
         # assert xd['date'] > last_xd['date']
@@ -411,14 +417,14 @@ class XdList(object):
             # 同向延续
             if last_xd['fx_mark'] > 0 and xd['value'] > last_xd['value']:
                 xd_list[-1] = xd
-                xd_list.update_xd_eigenvalue(trade_date)
+                xd_list.update_xd_eigenvalue()
                 return True
             # 反向判断
             elif last_xd['fx_mark'] < 0:
                 # 价格判断
                 if xd['value'] > xd2['value']:
                     xd_list.append(xd)
-                    xd_list.update_xd_eigenvalue(trade_date)
+                    xd_list.update_xd_eigenvalue()
                     return True
                 # 出现三笔破坏线段，连续两笔，一笔比一笔高,寻找段之间的最高点
                 elif bi3['date'] > last_xd['date'] and xd['value'] > bi3['value']:
@@ -439,20 +445,20 @@ class XdList(object):
                         index = index - 2
                         bi = bi_list[index]
                     xd_list.append(xd)
-                    xd_list.update_xd_eigenvalue(trade_date)
+                    xd_list.update_xd_eigenvalue()
                     return True
         elif bi3['fx_mark'] < 0:
             # 同向延续
             if last_xd['fx_mark'] < 0 and xd['value'] < last_xd['value']:
                 xd_list[-1] = xd
-                xd_list.update_xd_eigenvalue(trade_date)
+                xd_list.update_xd_eigenvalue()
                 return True
             # 反向判断
             elif last_xd['fx_mark'] > 0:
                 # 价格判断
                 if xd['value'] < xd2['value']:
                     xd_list.append(xd)
-                    xd_list.update_xd_eigenvalue(trade_date)
+                    xd_list.update_xd_eigenvalue()
                     return True
                 # 出现三笔破坏线段，连续两笔，一笔比一笔低,将最低的一笔作为段的起点，避免出现最低点不是端点的问题
                 elif bi3['date'] > last_xd['date'] and xd['value'] < bi3['value']:
@@ -473,11 +479,11 @@ class XdList(object):
                         index = index - 2
                         bi = bi_list[index]
                     xd_list.append(xd)
-                    xd_list.update_xd_eigenvalue(trade_date)
+                    xd_list.update_xd_eigenvalue()
                     return True
         return False
 
-    def update_sig(self, bars, indicators):
+    def update_sig(self):
         """
         线段更新后调用，判断是否出现买点
         """
@@ -492,10 +498,10 @@ class XdList(object):
         # else:
         #     last_zs = None
 
-        boll = indicators.boll[-1]
+        boll = self.indicators.boll[-1]
 
         sig = {
-            'date': bars[-1]['date'],
+            'date': self.bars[-1]['date'],
             'real_loc': zs['real_loc'],
             'location': zs['location'],
             'weight': zs['weight'],
@@ -506,7 +512,7 @@ class XdList(object):
         }
 
         if xd['fx_mark'] > 0:  # 上升趋势
-            sig.update(boll=boll.get('UB', np.nan) / bars[-1]['high'] * 100 - 100)
+            sig.update(boll=boll.get('UB', np.nan) / self.bars[-1]['high'] * 100 - 100)
             if xd['value'] > zs['GG'][-1]['value']:
                 xd_mark = -1  # 如果weight=1, 背驰，有可能1卖
                 resistance = np.nan
@@ -529,7 +535,7 @@ class XdList(object):
                 support = np.nan
 
         elif xd['fx_mark'] < 0:  # 下降趋势
-            sig.update(boll=100 - boll.get('LB', np.nan) / bars[-1]['low'] * 100)
+            sig.update(boll=100 - boll.get('LB', np.nan) / self.bars[-1]['low'] * 100)
             if xd['value'] > zs['GG'][-1]['value']:
                 xd_mark = 4  # 三买
                 resistance = np.nan
@@ -555,6 +561,15 @@ class XdList(object):
 
         sig.update(xd_mark=xd_mark, support=support * 100, resistance=resistance * 100)
         self.sig_list.append(sig)
+
+    def update(self):
+
+        self.update_zs()
+
+        # 计算对应买卖点
+        self.update_sig()
+
+        return self.update_xd()
 
 
 def update_bi(new_bars: list, fx_list: list, bi_list: XdList, trade_date: list):
@@ -597,7 +612,7 @@ def update_bi(new_bars: list, fx_list: list, bi_list: XdList, trade_date: list):
         bi2 = fx_list[-2].copy()
         bi_list.append(bi2)
         bi_list.append(bi)
-        bi_list.update_xd_eigenvalue(trade_date)
+        bi_list.update_xd_eigenvalue()
         return False
 
     last_bi = bi_list[-1]
@@ -615,7 +630,7 @@ def update_bi(new_bars: list, fx_list: list, bi_list: XdList, trade_date: list):
             if (last_bi['fx_mark'] > 0 and bar['high'] > last_bi['value']) \
                     or (last_bi['fx_mark'] < 0 and bar['low'] < last_bi['value']):
                 bi_list[-1] = bar
-                bi_list.update_xd_eigenvalue(trade_date)
+                bi_list.update_xd_eigenvalue()
                 return True
 
             try:
@@ -639,7 +654,7 @@ def update_bi(new_bars: list, fx_list: list, bi_list: XdList, trade_date: list):
                     bi_list.append(bi)
                 else:
                     bi_list.append(bar)
-                bi_list.update_xd_eigenvalue(trade_date)
+                bi_list.update_xd_eigenvalue()
                 return True
 
             # 只有一个端点，没有价格确认
@@ -651,7 +666,7 @@ def update_bi(new_bars: list, fx_list: list, bi_list: XdList, trade_date: list):
             if (last_bi['fx_mark'] < 0 and bar['high'] > bi_list[-2]['value']) \
                     or (last_bi['fx_mark'] > 0 and bar['low'] < bi_list[-2]['value']):
                 bi_list.append(bar)
-                bi_list.update_xd_eigenvalue(trade_date)
+                bi_list.update_xd_eigenvalue()
                 return True
 
         else:  # 原有未出现分型笔的延续
@@ -660,14 +675,14 @@ def update_bi(new_bars: list, fx_list: list, bi_list: XdList, trade_date: list):
             #     print('error')
             #     return False
             bi_list[-1] = bar
-            bi_list.update_xd_eigenvalue(trade_date)
+            bi_list.update_xd_eigenvalue()
             return True
         return False
 
     # 非分型结尾笔，直接替换成分型, 没有新增笔，后续不需要处理，同一个端点确认
     if 'direction' in last_bi or bi['date'] == last_bi['date']:
         bi_list[-1] = bi
-        bi_list.update_xd_eigenvalue(trade_date)
+        bi_list.update_xd_eigenvalue()
         return True
 
     # fx_end处理，分型处理完后，因为分型确认滞后，所以还需要对fx_end 也就是当前K线进行处理，否则会出现缺失或者识别滞后的问题
@@ -679,7 +694,7 @@ def update_bi(new_bars: list, fx_list: list, bi_list: XdList, trade_date: list):
 
         if last_bi['fx_mark'] * bar['value'] > last_bi['fx_mark'] * last_bi['value']:
             bi_list[-1] = bar
-            bi_list.update_xd_eigenvalue(trade_date)
+            bi_list.update_xd_eigenvalue()
             return True
 
     # 分型处理，连续高低点处理，只判断是否后移,没有增加笔
@@ -688,7 +703,7 @@ def update_bi(new_bars: list, fx_list: list, bi_list: XdList, trade_date: list):
     if last_bi['fx_mark'] * bi['fx_mark'] > 0:
         if np.sign(last_bi['fx_mark']) * last_bi['value'] < bi['fx_mark'] * bi['value']:
             bi_list[-1] = bi
-            bi_list.update_xd_eigenvalue(trade_date)
+            bi_list.update_xd_eigenvalue()
             return True
     else:
         # 笔确认是条件1、时间破坏，两个不同分型间至少有一根K线，2、价格破坏，向下的一笔破坏了上一笔的低点
@@ -707,7 +722,7 @@ def update_bi(new_bars: list, fx_list: list, bi_list: XdList, trade_date: list):
                 index = index - 1
 
             bi_list.append(bi)
-            bi_list.update_xd_eigenvalue(trade_date)
+            bi_list.update_xd_eigenvalue()
             return True
 
         # 只有一个端点，没有价格确认
@@ -719,7 +734,7 @@ def update_bi(new_bars: list, fx_list: list, bi_list: XdList, trade_date: list):
         if (bi['fx_mark'] > 0 and bi['value'] > bi_list[-2]['value']) \
                 or (bi['fx_mark'] < 0 and bi['value'] < bi_list[-2]['value']):
             bi_list.append(bi)
-            bi_list.update_xd_eigenvalue(trade_date)
+            bi_list.update_xd_eigenvalue()
             return True
 
     return handle_fx_end()
@@ -731,35 +746,35 @@ class CzscBase:
         # assert isinstance(code, str)
         # self.code = code.upper()
 
-        self._trade_date = []  # 用来查找索引
-        self._bars = []
-        self._new_bars = []
-        self._fx_list = []
-        self._xd_list = XdList()  # bi作为线段的head
-        self._sig_list = []
+        self.trade_date = []  # 用来查找索引
+        self.bars = []
         self.indicators = IndicatorSet()
+        self.new_bars = []
+        self.fx_list = []
+        self.xd_list = XdList(self.bars, self.indicators, self.trade_date)  # bi作为线段的head
+        self.sig_list = []
 
     def update(self):
         # 有包含关系时，不可能有分型出现，不出现分型时才需要
-        self.indicators.update(self._bars)
+        self.indicators.update(self.bars)
 
-        update_fx(bars=self._bars, new_bars=self._new_bars, fx_list=self._fx_list, trade_date=self._trade_date)
+        update_fx(bars=self.bars, new_bars=self.new_bars, fx_list=self.fx_list, trade_date=self.trade_date)
 
         if not update_bi(
-                new_bars=self._new_bars, fx_list=self._fx_list, bi_list=self._xd_list, trade_date=self._trade_date
+                new_bars=self.new_bars, fx_list=self.fx_list, bi_list=self.xd_list, trade_date=self.trade_date
         ):
             return
 
         # 新增确定性的笔才处理段
-        xd_list = self._xd_list
+        xd_list = self.xd_list
         result = True
         while result:
-            xd_list.update_zs()
+            result = xd_list.update()
 
             # 计算对应买卖点
-            xd_list.update_sig(bars=self._bars, indicators=self.indicators)
-
-            result = xd_list.update_xd(trade_date=self._trade_date)
+            # xd_list.update_sig(bars=self.bars, indicators=self.indicators)
+            #
+            # result = xd_list.update_xd(trade_date=self.trade_date)
             temp_list = xd_list
             xd_list = xd_list.next
             xd_list.prev = temp_list
@@ -786,7 +801,7 @@ class CzscMongo(CzscBase):
         self._bi_list = []
         self.old_count = len(self._bi_list)
         if len(self._bi_list) > 0:
-            # self._fx_list = self._bi_list
+            # self.fx_list = self._bi_list
             start = self._bi_list[-1]['fx_end']
         else:
             start = '1990-01-01'
@@ -796,8 +811,8 @@ class CzscMongo(CzscBase):
 
     def draw(self, chart_path=None):
         chart = kline_pro(
-            kline=self._bars, fx=self._fx_list,
-            bs=self._sig_list, xd=self._xd_list,
+            kline=self.bars, fx=self.fx_list,
+            bs=self.sig_list, xd=self.xd_list,
             title=self.code, width='1520px', height='580px'
             # title=self.code, width='2540px', height='850px'
         )
@@ -816,7 +831,7 @@ class CzscMongo(CzscBase):
         # if 'trade' in bar:
         #     bar['vol'] = bar.pop('trade')
         # bar['date'] = pd.to_datetime(bar['date'])
-        self._bars.append(bar)
+        self.bars.append(bar)
 
         try:
             self.update()
@@ -859,7 +874,7 @@ class CzscMongo(CzscBase):
             logging.info('Now Saving CZSC_SIG_DAY==== {}'.format(str(self.code)))
             code = self.code
 
-            xd = self._xd_list
+            xd = self.xd_list
             index = 0
             sig = []
             while xd:
@@ -895,7 +910,7 @@ class CzscMongo(CzscBase):
             print(error)
 
     def to_csv(self):
-        xd = self._xd_list
+        xd = self.xd_list
         index = 0
         sig = []
         while xd:
@@ -910,7 +925,7 @@ class CzscMongo(CzscBase):
         sig_df.to_csv(filename)
 
     def to_df(self):
-        xd = self._xd_list
+        xd = self.xd_list
         index = 0
         sig = []
         while xd:
@@ -930,7 +945,7 @@ class CzscMongo(CzscBase):
             return pd.DataFrame()
 
     def to_json(self):
-        xd = self._xd_list
+        xd = self.xd_list
         index = 0
         data = []
         while xd:
@@ -1314,7 +1329,7 @@ def main_signal():
             # B 股，2，9开头的剔除掉
             factor = findata.financial_factor
             # 营业收入＜1亿
-            if df.iloc[-1]['operatingRevenue']< 100000000:
+            if df.iloc[-1]['operatingRevenue'] < 100000000:
                 return False
 
             last_factor = factor.iloc[-1]
@@ -1382,10 +1397,11 @@ def main_signal():
 
 
 def main_single():
-    czsc_mongo = CzscMongo(code='tl8', freq='day', exchange='hkconnect')
+    czsc_mongo = CzscMongo(code='apl8', freq='day', exchange='hkconnect')
     czsc_mongo.run()
     czsc_mongo.draw()
-    czsc_mongo.to_csv()
+    # czsc_mongo.to_csv()
+    # czsc_mongo.to_json()
 
 
 if __name__ == '__main__':

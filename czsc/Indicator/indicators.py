@@ -31,7 +31,8 @@ from czsc.Indicator import ema
 
 
 class Indicator(metaclass=ABCMeta):
-    def __init__(self, params, field='close'):
+    def __init__(self, bars, params, field='close'):
+        self.bars = bars
         self.value = []
         self.field = field
         self.params = params
@@ -47,17 +48,17 @@ class Indicator(metaclass=ABCMeta):
 
 
 class MA(Indicator):
-    def __init__(self, params=None):
+    def __init__(self, bars=None, params=None):
         if params is None:
             params = [5, 10, 20, 30, 60]
 
-        super().__init__(params=params)
+        super().__init__(bars=bars, params=params)
 
         self.item_names = ['ma' + str(n) for n in self.params]
 
-    def update(self, bars):
-        bar = bars[-1]
-        length = len(bars)
+    def update(self):
+        bar = self.bars[-1]
+        length = len(self.bars)
         record = {'date': bar['date']}
 
         for n, item_name in zip(self.params, self.item_names):
@@ -65,21 +66,21 @@ class MA(Indicator):
                 continue
 
             if length == n:
-                data = np.array([bar[self.field] for bar in bars])
+                data = np.array([bar[self.field] for bar in self.bars])
                 record[item_name] = data.mean()
                 continue
 
-            record[item_name] = self.value[-1][item_name] + (bar[self.field] - bars[-n - 1][self.field]) / n
+            record[item_name] = self.value[-1][item_name] + (bar[self.field] - self.bars[-n - 1][self.field]) / n
 
         self.value.append(record)
 
 
 class EMA(Indicator):
-    def __init__(self, params=None):
+    def __init__(self, bars=None, params=None):
         if params is None:
             params = [5, 34]
 
-        super().__init__(params=params)
+        super().__init__(bars=bars, params=params)
 
         ema_func = {}
         for n in self.params:
@@ -88,9 +89,9 @@ class EMA(Indicator):
 
         self.ema_func = ema_func
 
-    def update(self, bars):
-        bar = bars[-1]
-        length = len(bars)
+    def update(self):
+        bar = self.bars[-1]
+        length = len(self.bars)
         record = {'date': bar['date']}
 
         for item_name in self.ema_func:
@@ -105,33 +106,31 @@ class EMA(Indicator):
 
 
 class BOLL(Indicator):
-    def __init__(self, params=None):
+    def __init__(self, bars=None, params=None):
         if params is None:
             params = [20, 2]
 
-        super().__init__(params=params)
+        super().__init__(bars=bars, params=params)
 
         self.N = self.params[0]
         self.P = self.params[1]
 
-        self.ma = MA(params=[self.N])
+        self.ma = MA(bars=self.bars, params=[self.N])
 
-    def update(self, bars):
-        self.ma.update(bars)
+    def update(self):
+        self.ma.update()
 
-        bar = bars[-1]
-        length = len(bars)
+        bar = self.bars[-1]
+        length = len(self.bars)
         record = {'date': bar['date']}
 
         if length < self.N:
             self.value.append(record)
             return
 
-        item_name = 'ma' + str(self.N)
         date, record['boll'] = self.ma[-1].values()
-        # record['boll'] = self.ma[-1][item_name]
 
-        close = np.array([bar['close'] for bar in bars[-self.N:]])
+        close = np.array([bar['close'] for bar in self.bars[-self.N:]])
 
         record['UB'] = record['boll'] + self.P * close.std(ddof=1)  # 使用估算标准差，ddof 自由度，分母为N-1
         record['LB'] = record['boll'] - self.P * close.std(ddof=1)
@@ -140,20 +139,16 @@ class BOLL(Indicator):
 
 
 class MACD(Indicator):
-    def __init__(self, params=None):
+    def __init__(self, bars=None, params=None):
         if params is None:
             params = [5, 34, 5]
 
-        super().__init__(params=params)
+        super().__init__(bars=bars, params=params)
 
-        self.short = self.params[0]
-        self.long = self.params[1]
-        self.mid = self.params[2]
-
-        self.ema = EMA(params=self.params[:2])
+        self.ema = EMA(bars=self.bars, params=self.params[:2])
         self.dea_func = ema(self.params[2])
 
-    def update(self, bars):
+    def update(self):
         """
         SHORT:=5;LONG:=34;MID:=5;
         DIF:EMA(CLOSE,SHORT)-EMA(CLOSE,LONG);
@@ -164,7 +159,7 @@ class MACD(Indicator):
         """
         # bar = bars[-1]
         # record = {'date': bar['date']}
-        self.ema.update(bars)
+        self.ema.update()
         date, short,  long = self.ema[-1].values()
         dif = short - long
         record = {'date': date, 'dif': dif}
@@ -182,23 +177,26 @@ class MACD(Indicator):
 
 
 class IndicatorSet:
-    def __init__(self):
-        self.bars = []
-        # self.ma = MA()
-        # self.ema = EMA()
-        self.boll = BOLL()
-        self.macd = MACD()
+    def __init__(self, bars=None):
+        if bars is None:
+            self.bars = []
+        else:
+            self.bars = bars
+        # self.ma = MA(self.bars)
+        # self.ema = EMA(self.bars)
+        # self.boll = BOLL(self.bars)
+        self.macd = MACD(self.bars)
 
     def on_bar(self, bar):
         bar = bar.to_dict()
         self.bars.append(bar)
-        self.update(self.bars)
+        self.update()
 
-    def update(self, bars):
-        # self.ma.update(self.bars)
-        # self.ema.update(self.bars)
-        self.boll.update(bars)
-        self.macd.update(bars)
+    def update(self):
+        # self.ma.update()
+        # self.ema.update()
+        # self.boll.update()
+        self.macd.update()
 
 
 if __name__ == '__main__':
