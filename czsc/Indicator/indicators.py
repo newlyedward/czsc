@@ -146,10 +146,6 @@ class MACD(Indicator):
 
         super().__init__(params=params)
 
-        self.short = self.params[0]
-        self.long = self.params[1]
-        self.mid = self.params[2]
-
         self.ema = EMA(params=self.params[:2])
         self.dea_func = ema(self.params[2])
 
