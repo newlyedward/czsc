@@ -104,7 +104,7 @@ class EMA(Indicator):
         self.value.append(record)
 
 
-class Boll(Indicator):
+class BOLL(Indicator):
     def __init__(self, params=None):
         if params is None:
             params = [20, 2]
@@ -186,36 +186,19 @@ class IndicatorSet:
         self.bars = []
         # self.ma = MA()
         # self.ema = EMA()
-        # self.boll = Boll()
+        self.boll = BOLL()
         self.macd = MACD()
 
     def on_bar(self, bar):
         bar = bar.to_dict()
         self.bars.append(bar)
-        self.update()
+        self.update(self.bars)
 
-    def update(self):
+    def update(self, bars):
         # self.ma.update(self.bars)
         # self.ema.update(self.bars)
-        # self.boll.update(self.bars)
-        self.macd.update(self.bars)
-
-
-def BOLL(bars, N=20, P=2):
-    """
-    布林线
-    """
-    length = min(len(bars), N)
-
-    if length > N:
-        close = np.array([bar['close'] for bar in bars[-N:]])
-    else:
-        close = np.array([bar['close'] for bar in bars[-N:]])
-
-    boll = close.mean()
-    UB = boll + P * close.std()
-    LB = boll - P * close.std()
-    return {'BOLL': boll, 'UB': UB, 'LB': LB}
+        self.boll.update(bars)
+        self.macd.update(bars)
 
 
 if __name__ == '__main__':

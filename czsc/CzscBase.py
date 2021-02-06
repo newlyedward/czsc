@@ -42,7 +42,7 @@ from czsc.Utils.logs import util_log_info
 from czsc.Utils.trade_date import util_get_next_day, util_get_trade_gap
 from czsc.Utils.transformer import DataEncoder
 from czsc.factors import threshold_dict
-from czsc.Indicator import BOLL
+from czsc.Indicator import IndicatorSet
 
 
 class ClSimBar(ClThread):
@@ -477,7 +477,7 @@ class XdList(object):
                     return True
         return False
 
-    def update_sig(self, bars):
+    def update_sig(self, bars, indicators):
         """
         线段更新后调用，判断是否出现买点
         """
@@ -492,7 +492,7 @@ class XdList(object):
         # else:
         #     last_zs = None
 
-        boll = BOLL(bars)
+        boll = indicators.boll[-1]
 
         sig = {
             'date': bars[-1]['date'],
@@ -506,7 +506,7 @@ class XdList(object):
         }
 
         if xd['fx_mark'] > 0:  # 上升趋势
-            sig.update(boll=boll['UB'] / bars[-1]['high'] * 100 - 100)
+            sig.update(boll=boll.get('UB', np.nan) / bars[-1]['high'] * 100 - 100)
             if xd['value'] > zs['GG'][-1]['value']:
                 xd_mark = -1  # 如果weight=1, 背驰，有可能1卖
                 resistance = np.nan
@@ -529,7 +529,7 @@ class XdList(object):
                 support = np.nan
 
         elif xd['fx_mark'] < 0:  # 下降趋势
-            sig.update(boll=100 - boll['LB'] / bars[-1]['low'] * 100)
+            sig.update(boll=100 - boll.get('LB', np.nan) / bars[-1]['low'] * 100)
             if xd['value'] > zs['GG'][-1]['value']:
                 xd_mark = 4  # 三买
                 resistance = np.nan
@@ -603,7 +603,7 @@ def update_bi(new_bars: list, fx_list: list, bi_list: XdList, trade_date: list):
     last_bi = bi_list[-1]
     bar.update(value=bar['high'] if bar['direction'] > 0 else bar['low'])
 
-    # if bar['date'] > pd.to_datetime('2016-11-09'):
+    # if bar['date'] > pd.to_datetime('2020-09-08'):
     #     print('error')
 
     # k 线确认模式，当前K线的日期比分型K线靠后，说明进来的数据时K线
@@ -737,66 +737,11 @@ class CzscBase:
         self._fx_list = []
         self._xd_list = XdList()  # bi作为线段的head
         self._sig_list = []
-
-    def update_sig(self):
-        """
-        缠论买卖信号，一二三买卖
-        """
-        if len(self._xd_list.zs_list) < 1:
-            return False
-
-        # 不确定性的笔来给出买卖信号
-        zs = self._xd_list.zs_list[-1]
-        bi = self._bi_list[-1]
-        bar = self._bars[-1]
-        last_new_bar = self._new_bars[-2]
-
-        if bi['fx_mark'] == 'g':
-            sig = {
-                'bs': 'sell',
-                'date': bar['date'],
-                'value': last_new_bar['low']
-            }
-            # 中枢只有一根确定的笔，说明不是一卖就是二卖，小级别查趋势确认
-            if len(zs['bi_list']) < 3:
-                if bi['value'] > zs['ZG']['value']:
-                    sig.update(type_="I_sell")
-                else:
-                    sig.update(type_="II_sell")
-            # 三卖
-            if bi['value'] < zs['ZD']['value']:
-                sig.update(type_="III_sell")
-            # 盘整背驰卖点,比较前一同向段,持续时间差不多的情况才有比较的价值
-            elif bi['value'] > zs['GG'][-1]['value']:
-                sig.update(type_="pb_sell")
-        elif bi['fx_mark'] == 'd':
-            sig = {
-                'bs': 'buy',
-                'date': bar['date'],
-                'value': last_new_bar['high']
-            }
-            # 中枢只有一根确定的笔，说明不是一买就是二买，小级别查趋势确认
-            if len(zs['bi_list']) < 3:
-                if bi['value'] < zs['ZD']['value']:
-                    sig.update(type_="I_buy")
-                else:
-                    sig.update(type_="II_buy")
-            # 三买
-            if bi['value'] > zs['ZG']['value']:
-                sig.update(type_="III_buy")
-            elif bi['value'] < zs['DD'][-1]['value']:
-                sig.update(type_="pb_buy")
-        else:
-            raise ValueError
-
-        if 'type_' in sig:
-            self._sig_list.append(sig)
-            return True
-
-        return False
+        self.indicators = IndicatorSet()
 
     def update(self):
         # 有包含关系时，不可能有分型出现，不出现分型时才需要
+        self.indicators.update(self._bars)
 
         update_fx(bars=self._bars, new_bars=self._new_bars, fx_list=self._fx_list, trade_date=self._trade_date)
 
@@ -812,7 +757,7 @@ class CzscBase:
             xd_list.update_zs()
 
             # 计算对应买卖点
-            xd_list.update_sig(bars=self._bars)
+            xd_list.update_sig(bars=self._bars, indicators=self.indicators)
 
             result = xd_list.update_xd(trade_date=self._trade_date)
             temp_list = xd_list
@@ -830,7 +775,7 @@ class CzscBase:
 
 
 class CzscMongo(CzscBase):
-    def __init__(self, code='rbl8', freq='day', exchange=None):
+    def __init__(self, code='rul8', freq='day', exchange=None):
         # 只处理一个品种
         super().__init__()
         self.code = code
@@ -1437,7 +1382,7 @@ def main_signal():
 
 
 def main_single():
-    czsc_mongo = CzscMongo(code='apl8', freq='day', exchange='hkconnect')
+    czsc_mongo = CzscMongo(code='tl8', freq='day', exchange='hkconnect')
     czsc_mongo.run()
     czsc_mongo.draw()
     czsc_mongo.to_csv()
