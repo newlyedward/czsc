@@ -352,8 +352,13 @@ class XdList(object):
         xd = self.xd_list[-1]
         last_xd = self.xd_list[-2]
         xd.update(pct_change=(xd['value'] - last_xd['value']) / last_xd['value'])
-        kn = trade_date.index(xd['date']) - trade_date.index(last_xd['date']) + 1
-        xd.update(fx_mark=kn * np.sign(xd.get('fx_mark', xd.get('direction', 0))))
+
+        start = trade_date.index(last_xd['date'])
+        end = trade_date.index(xd['date'])
+        kn = end - start + 1
+        fx_mark = kn * np.sign(xd.get('fx_mark', xd.get('direction', 0)))
+        macd = sum([x['macd'] for x in self.indicators.macd[start: end+1] if fx_mark * x['macd'] > 0])
+        xd.update(fx_mark=fx_mark, macd=macd, avg_macd=macd/kn)
 
     def update_xd(self):
         """更新笔分型序列
@@ -493,10 +498,6 @@ class XdList(object):
         zs = self.zs_list[-1]
         xd = self.xd_list[-1]
         last_xd = self.xd_list[-2]
-        # if len(self.zs_list) > 1:
-        #     last_zs = self.zs_list[-2]    # 中枢不一定存在
-        # else:
-        #     last_zs = None
 
         boll = self.indicators.boll[-1]
 
@@ -509,10 +510,17 @@ class XdList(object):
             'last_mark': last_xd['fx_mark'],
             'time_ratio': abs(xd['fx_mark'] / last_xd['fx_mark']) * 100,
             'pct_change': xd['pct_change'] * 100,
+            'macd': xd['macd'],
+            'avg_macd': xd['avg_macd'],
         }
 
         if xd['fx_mark'] > 0:  # 上升趋势
+            sig.update(GG_macd=zs['GG'][-1].get('macd', np.nan), GG_avg_macd=zs['GG'][-1].get('avg_macd', np.nan))
+            if zs['location'] > 0 and zs.get('zs_start', False):
+                sig.update(start_macd=zs['zs_start']['macd'], start_avg_macd=zs['zs_start']['avg_macd'])
+
             sig.update(boll=boll.get('UB', np.nan) / self.bars[-1]['high'] * 100 - 100)
+
             if xd['value'] > zs['GG'][-1]['value']:
                 xd_mark = -1  # 如果weight=1, 背驰，有可能1卖
                 resistance = np.nan
@@ -535,7 +543,12 @@ class XdList(object):
                 support = np.nan
 
         elif xd['fx_mark'] < 0:  # 下降趋势
+            sig.update(DD_macd=zs['DD'][-1].get('macd', np.nan), DD_avg_macd=zs['DD'][-1].get('avg_macd', np.nan))
+            if zs['location'] < 0 and zs.get('zs_start', False):
+                sig.update(start_macd=zs['zs_start']['macd'], start_avg_macd=zs['zs_start']['avg_macd'])
+
             sig.update(boll=100 - boll.get('LB', np.nan) / self.bars[-1]['low'] * 100)
+
             if xd['value'] > zs['GG'][-1]['value']:
                 xd_mark = 4  # 三买
                 resistance = np.nan
@@ -748,7 +761,7 @@ class CzscBase:
 
         self.trade_date = []  # 用来查找索引
         self.bars = []
-        self.indicators = IndicatorSet()
+        self.indicators = IndicatorSet(self.bars)
         self.new_bars = []
         self.fx_list = []
         self.xd_list = XdList(self.bars, self.indicators, self.trade_date)  # bi作为线段的head
@@ -756,7 +769,7 @@ class CzscBase:
 
     def update(self):
         # 有包含关系时，不可能有分型出现，不出现分型时才需要
-        self.indicators.update(self.bars)
+        self.indicators.update()
 
         update_fx(bars=self.bars, new_bars=self.new_bars, fx_list=self.fx_list, trade_date=self.trade_date)
 
@@ -1399,8 +1412,8 @@ def main_signal():
 def main_single():
     czsc_mongo = CzscMongo(code='apl8', freq='day', exchange='hkconnect')
     czsc_mongo.run()
-    czsc_mongo.draw()
-    # czsc_mongo.to_csv()
+    # czsc_mongo.draw()
+    czsc_mongo.to_csv()
     # czsc_mongo.to_json()
 
 

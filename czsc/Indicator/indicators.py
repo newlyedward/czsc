@@ -184,7 +184,7 @@ class IndicatorSet:
             self.bars = bars
         # self.ma = MA(self.bars)
         # self.ema = EMA(self.bars)
-        # self.boll = BOLL(self.bars)
+        self.boll = BOLL(self.bars)
         self.macd = MACD(self.bars)
 
     def on_bar(self, bar):
@@ -195,7 +195,7 @@ class IndicatorSet:
     def update(self):
         # self.ma.update()
         # self.ema.update()
-        # self.boll.update()
+        self.boll.update()
         self.macd.update()
 
 
