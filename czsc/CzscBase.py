@@ -33,6 +33,7 @@ from czsc.Fetch.tdx import get_bar
 from czsc.Indicator import IndicatorSet
 from czsc.Utils.echarts_plot import kline_pro
 from czsc.Utils.logs import util_log_info
+from czsc.Utils.trade_date import TradeDate
 from czsc.Utils.transformer import DataEncoder
 
 
@@ -67,7 +68,7 @@ def update_fx(bars, new_bars: list, fx_list: list, trade_date: list):
     bar = bars[-1].copy()
 
     if len(trade_date) > 1:
-        if bar['date'] < trade_date[-1]:
+        if TradeDate(bar['date']) < TradeDate(trade_date[-1]):
             util_log_info('{} data is older than {} !'.format(bar['date'], trade_date[-1]))
             return
 
@@ -218,7 +219,7 @@ class XdList(object):
         last_zs = zs_list[-1]
         xd = xd_list[-2]
 
-        if last_zs['xd_list'][-1]['date'] >= xd['date']:
+        if TradeDate(last_zs['xd_list'][-1]['date']) >= TradeDate(xd['date']):
             # 已经计算过中枢
             return False
 
@@ -361,7 +362,7 @@ class XdList(object):
             return True
 
         # assert xd['date'] > last_xd['date']
-        if xd['date'] <= last_xd['date']:
+        if TradeDate(xd['date']) <= TradeDate(last_xd['date']):
             util_log_info('The {} quotes bar input maybe wrong!'.format(xd['date']))
 
         if bi3['fx_mark'] > 0:
@@ -378,19 +379,19 @@ class XdList(object):
                     xd_list.update_xd_eigenvalue()
                     return True
                 # 出现三笔破坏线段，连续两笔，一笔比一笔高,寻找段之间的最高点
-                elif bi3['date'] > last_xd['date'] and xd['value'] > bi3['value']:
+                elif TradeDate(bi3['date']) > TradeDate(last_xd['date']) and xd['value'] > bi3['value']:
                     index = -5
                     bi = bi_list[index]
                     # 连续两个高点没有碰到段前面一个低点
                     try:
-                        if bi['date'] < last_xd['date'] and \
+                        if TradeDate(bi['date']) < TradeDate(last_xd['date']) and \
                                 bi_list[index - 1]['value'] > bi3['value'] and \
                                 bi_list[index]['value'] > xd['value']:
                             return False
                     except Exception as err:
                         util_log_info('Last xd {}:{}'.format(last_xd['date'], err))
 
-                    while bi['date'] > last_xd['date']:
+                    while TradeDate(bi['date']) > TradeDate(last_xd['date']):
                         if xd['value'] < bi['value']:
                             xd = bi
                         index = index - 2
@@ -412,19 +413,19 @@ class XdList(object):
                     xd_list.update_xd_eigenvalue()
                     return True
                 # 出现三笔破坏线段，连续两笔，一笔比一笔低,将最低的一笔作为段的起点，避免出现最低点不是端点的问题
-                elif bi3['date'] > last_xd['date'] and xd['value'] < bi3['value']:
+                elif TradeDate(bi3['date']) > TradeDate(last_xd['date']) and xd['value'] < bi3['value']:
                     index = -5
                     bi = bi_list[index]
                     # 连续两个个低点没有碰到段前面一高低点
                     try:
-                        if bi['date'] < last_xd['date'] and \
+                        if TradeDate(bi['date']) < TradeDate(last_xd['date']) and \
                                 bi_list[index - 1]['value'] < bi3['value'] and \
                                 bi_list[index]['value'] < xd['value']:
                             return False
                     except Exception as err:
                         util_log_info('Last xd {}:{}'.format(last_xd['date'], err))
 
-                    while bi['date'] > last_xd['date']:
+                    while TradeDate(bi['date']) > TradeDate(last_xd['date']):
                         if xd['value'] > bi['value']:
                             xd = bi
                         index = index - 2
@@ -557,8 +558,8 @@ def update_bi(new_bars: list, fx_list: list, bi_list: XdList, trade_date: list):
     # 每根k线都要对bi进行判断
     bar = new_bars[-1].copy()
 
-    if bar['date'] < trade_date[-1]:
-        # 行情数据出现错误
+    if TradeDate(bar['date']) < TradeDate(trade_date[-1]):
+        # 包含的K线，不会改变bi的状态，不需要处理
         return False
 
     if len(fx_list) < 2:
@@ -581,7 +582,7 @@ def update_bi(new_bars: list, fx_list: list, bi_list: XdList, trade_date: list):
     #     print('error')
 
     # k 线确认模式，当前K线的日期比分型K线靠后，说明进来的数据时K线
-    if bar['date'] > bi['fx_end']:
+    if TradeDate(bar['date']) > TradeDate(bi['fx_end']):
         if 'direction' not in last_bi:  # bi的结尾是分型
             # 趋势延续替代,首先确认是否延续, 由于处理过包含，高低点可能不正确，反趋势的极值点会忽略
             # 下一根继续趋势，端点后移，如果继续反趋势，该点忽略
@@ -601,7 +602,7 @@ def update_bi(new_bars: list, fx_list: list, bi_list: XdList, trade_date: list):
             if kn_inside > 1 and bar['direction'] * last_bi['fx_mark'] < 0:
                 # 寻找同向的第一根分型
                 index = -1
-                while bi['date'] > last_bi['date']:
+                while TradeDate(bi['date']) > TradeDate(last_bi['date']):
                     if bar['direction'] * bi['fx_mark'] > 0:
                         break
                     index = index - 1
@@ -670,7 +671,7 @@ def update_bi(new_bars: list, fx_list: list, bi_list: XdList, trade_date: list):
 
         if kn_inside > 0:  # 两个分型间至少有1根k线，端点有可能不是高低点
             index = -2
-            while fx_list[index]['date'] > last_bi['date']:
+            while TradeDate(fx_list[index]['date']) > TradeDate(last_bi['date']):
                 # 分析的fx_mark取值为-1和+1
                 if (bi['fx_mark'] * fx_list[index]['fx_mark'] > 0) \
                         and (bi['fx_mark'] * bi['value'] < fx_list[index]['fx_mark'] * fx_list[index]['value']):
@@ -772,8 +773,8 @@ class CzscMongo(CzscBase):
         chart = kline_pro(
             kline=self.bars, fx=self.fx_list,
             bs=self.sig_list, xd=self.xd_list,
-            title=self.code+'_'+self.freq, width='1520px', height='580px'
-            # title=self.code, width='2540px', height='850px'
+            # title=self.code+'_'+self.freq, width='1520px', height='580px'
+            title=self.code+'_'+self.freq, width='2540px', height='850px'
         )
 
         if not chart_path:
@@ -918,7 +919,7 @@ class CzscMongo(CzscBase):
             xd = xd.next
             index = index + 1
 
-        with open("{}.json".format(self.code), "w") as write_file:
+        with open("{}_{}.json".format(self.code, self.freq), "w") as write_file:
             json.dump(data, write_file, indent=4, sort_keys=True, cls=DataEncoder)
 
 
@@ -1018,15 +1019,15 @@ def main_signal():
 
 
 def main_single():
-    czsc_day = CzscMongo(code='tfl8', freq='day', exchange='hkconnect')
-    czsc_day.run()
-    czsc_day.draw()
-    czsc_day.to_csv()
-    czsc_min = CzscMongo(code='tfl8', start='2021-01-13', freq='5min', exchange='hkconnect')
+    # czsc_day = CzscMongo(code='tal8', freq='day', exchange='hkconnect')
+    # czsc_day.run()
+    # czsc_day.draw()
+    # czsc_day.to_csv()
+    czsc_min = CzscMongo(code='tal8', start='2021-01-26', freq='5min', exchange='hkconnect')
     czsc_min.run()
     czsc_min.draw()
-    czsc_min.to_csv()
-    # czsc_mongo.to_json()
+    # czsc_min.to_csv()
+    czsc_min.to_json()
 
 
 if __name__ == '__main__':

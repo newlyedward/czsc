@@ -1,7 +1,10 @@
 # coding: utf-8
+import functools
 import time
-from datetime import datetime
+import pandas as pd
+from datetime import datetime, time
 
+from czsc.Utils import util_log_info
 
 trade_date_sse = [
     '1990-12-19',
@@ -7811,3 +7814,68 @@ def util_get_trade_gap(start, end):
         return trade_date_sse.index(end) + 1 - trade_date_sse.index(start)
     else:
         return 0
+
+
+@functools.total_ordering
+class TradeDate:
+    """
+        __lt__(self,rhs)       self < rhs        小于
+        __le__(self,rhs)       self <= rhs       小于等于
+        __gt__(self,rhs)       self > rhs        大于
+        __ge__(self,rhs)       self >= rhs       大于等于
+        __eq__(self,rhs)       self == rhs       等于
+        __ne__(self,rhs)       self != rhs       不等于
+    """
+
+    def __init__(self, date):
+        if isinstance(date, str):
+            self.date = pd.to_datetime(date)
+        elif isinstance(date, pd.Timestamp):
+            self.date = date
+        else:
+            util_log_info('Wrong input data type!')
+
+        self.threshold = time(20, 30)
+
+    # def __lt__(self, other):
+    #     if self.date.date() < other.date.date():
+    #         return True
+    #     elif self.date.date() == other.date.date():
+    #         if self.date.time() < self.threshold:
+    #             if other.time() < self.threshold:
+    #                 return self.date.time() < other.date.time()
+    #             else:
+    #                 return False
+    #         else:
+    #             if other.date.time() < self.threshold:
+    #                 return True
+    #             else:
+    #                 return self.date.time() < other.date.time()
+    #     else:
+    #         return False
+
+    def __le__(self, other):
+        if self.date.date() < other.date.date():
+            return True
+        elif self.date.date() == other.date.date():
+            if self.date.time() < self.threshold:
+                if other.date.time() < self.threshold:
+                    return self.date.time() <= other.date.time()
+                else:
+                    return False
+            else:
+                if other.date.time() < self.threshold:
+                    return True
+                else:
+                    return self.date.time() <= other.date.time()
+        else:
+            return False
+
+    def __eq__(self, other):
+        return self.date == other.date
+
+
+if __name__ == "__main__":
+    start = pd.to_datetime('2020-11-06 09:05:00')
+    end = pd.to_datetime('2020-11-06 22:30:00')
+    TradeDate(start) <= TradeDate(end)
