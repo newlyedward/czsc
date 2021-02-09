@@ -772,7 +772,7 @@ class CzscMongo(CzscBase):
         chart = kline_pro(
             kline=self.bars, fx=self.fx_list,
             bs=self.sig_list, xd=self.xd_list,
-            title=self.code, width='1520px', height='580px'
+            title=self.code+'_'+self.freq, width='1520px', height='580px'
             # title=self.code, width='2540px', height='850px'
         )
 
@@ -1018,10 +1018,14 @@ def main_signal():
 
 
 def main_single():
-    czsc_mongo = CzscMongo(code='06886', freq='5min', exchange='hkconnect')
-    czsc_mongo.run()
-    czsc_mongo.draw()
-    czsc_mongo.to_csv()
+    czsc_day = CzscMongo(code='tfl8', freq='day', exchange='hkconnect')
+    czsc_day.run()
+    czsc_day.draw()
+    czsc_day.to_csv()
+    czsc_min = CzscMongo(code='tfl8', start='2021-01-13', freq='5min', exchange='hkconnect')
+    czsc_min.run()
+    czsc_min.draw()
+    czsc_min.to_csv()
     # czsc_mongo.to_json()
 
 
