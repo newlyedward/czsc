@@ -408,6 +408,9 @@ class XdList(object):
         last_xd = xd_list[-1]
         xd2 = xd_list[-2]
 
+        # if xd['date'] > pd.to_datetime('2016-07-12'):
+        #     print('test')
+
         # 非分型结尾段，直接替换成分型, 没有新增段，后续不需要处理，同一个端点确认
         if 'direction' in last_xd or xd['date'] == last_xd['date']:
             xd_list[-1] = xd  # 日期相等的情况是否已经在内存中修改过了？
@@ -803,7 +806,7 @@ class CzscBase:
 
 
 class CzscMongo(CzscBase):
-    def __init__(self, code='rul8', freq='day', exchange=None):
+    def __init__(self, code='rul8', start=None, freq='day', exchange=None):
         # 只处理一个品种
         super().__init__()
         self.code = code
@@ -816,7 +819,7 @@ class CzscMongo(CzscBase):
         if len(self._bi_list) > 0:
             # self.fx_list = self._bi_list
             start = self._bi_list[-1]['fx_end']
-        else:
+        elif start is None:
             start = '1990-01-01'
 
         self.data = get_bar(code, start, freq=freq, exchange=exchange)
@@ -826,8 +829,8 @@ class CzscMongo(CzscBase):
         chart = kline_pro(
             kline=self.bars, fx=self.fx_list,
             bs=self.sig_list, xd=self.xd_list,
-            title=self.code, width='1520px', height='580px'
-            # title=self.code, width='2540px', height='850px'
+            # title=self.code, width='1520px', height='580px'
+            title=self.code, width='2540px', height='850px'
         )
 
         if not chart_path:
@@ -934,7 +937,7 @@ class CzscMongo(CzscBase):
             index = index + 1
 
         sig_df = pd.concat(sig).set_index(['date', 'xd']).sort_index()
-        filename = '{}.csv'.format(self.code)
+        filename = '{}_{}.csv'.format(self.code, self.freq)
         sig_df.to_csv(filename)
 
     def to_df(self):
@@ -1325,58 +1328,58 @@ def main_signal():
             return True
 
         code = security.name
-        today = datetime.date.today()
-        year = today.year - 2
-        start = datetime.date(year, today.month, today.day).strftime('%Y-%m-%d')
+        # today = datetime.date.today()
+        # year = today.year - 2
+        # start = datetime.date(year, today.month, today.day).strftime('%Y-%m-%d')
         if security['exchange'] in ['sse', 'szse']:
-            if security['instrument'] not in ['stock']:
-                return True
-
-            df = fetch_financial_report(code, start=start)
-            try:
-                findata = FinancialStruct(df)
-            except:
-                util_log_info("Cant get {} financial data, maybe not list in market".format(code))
-                return False
-
-            # B 股，2，9开头的剔除掉
-            factor = findata.financial_factor
-            # 营业收入＜1亿
-            if df.iloc[-1]['operatingRevenue'] < 100000000:
-                return False
-
-            last_factor = factor.iloc[-1]
-            if last_factor['ROIC'] < threshold_dict['ROIC']:
-                return False
-
-            if last_factor['grossProfitMargin'] < threshold_dict['grossProfitMargin']:
-                return False
-
-            if last_factor['netProfitMargin'] < threshold_dict['netProfitMargin']:
-                return False
-
-            if last_factor['netProfitCashRatio'] < threshold_dict['netProfitCashRatio']:
-                return False
-
-            if last_factor['operatingIncomeGrowth'] < threshold_dict['operatingIncomeGrowth']:
-                return False
-
-            if last_factor['continuedProfitGrowth'] < threshold_dict['continuedProfitGrowth']:
-                return False
-
-            if last_factor['assetsLiabilitiesRatio'] > threshold_dict['assetsLiabilitiesRatio']:
-                return False
-
-            # 以下三个指标不适用金融和地产行业
-            if last_factor['cashRatio'] < threshold_dict['cashRatio']:
-                return False
-
-            if last_factor['inventoryRatio'] > threshold_dict['inventoryRatio']:
-                return False
-
-            if threshold_dict['interestCoverageRatio'][0] \
-                    < last_factor['interestCoverageRatio'] < threshold_dict['interestCoverageRatio'][1]:
-                return False
+            # if security['instrument'] not in ['stock']:
+            #     return True
+            #
+            # df = fetch_financial_report(code, start=start)
+            # try:
+            #     findata = FinancialStruct(df)
+            # except:
+            #     util_log_info("Cant get {} financial data, maybe not list in market".format(code))
+            #     return False
+            #
+            # # B 股，2，9开头的剔除掉
+            # factor = findata.financial_factor
+            # # 营业收入＜1亿
+            # if df.iloc[-1]['operatingRevenue'] < 100000000:
+            #     return False
+            #
+            # last_factor = factor.iloc[-1]
+            # if last_factor['ROIC'] < threshold_dict['ROIC']:
+            #     return False
+            #
+            # if last_factor['grossProfitMargin'] < threshold_dict['grossProfitMargin']:
+            #     return False
+            #
+            # if last_factor['netProfitMargin'] < threshold_dict['netProfitMargin']:
+            #     return False
+            #
+            # if last_factor['netProfitCashRatio'] < threshold_dict['netProfitCashRatio']:
+            #     return False
+            #
+            # if last_factor['operatingIncomeGrowth'] < threshold_dict['operatingIncomeGrowth']:
+            #     return False
+            #
+            # if last_factor['continuedProfitGrowth'] < threshold_dict['continuedProfitGrowth']:
+            #     return False
+            #
+            # if last_factor['assetsLiabilitiesRatio'] > threshold_dict['assetsLiabilitiesRatio']:
+            #     return False
+            #
+            # # 以下三个指标不适用金融和地产行业
+            # if last_factor['cashRatio'] < threshold_dict['cashRatio']:
+            #     return False
+            #
+            # if last_factor['inventoryRatio'] > threshold_dict['inventoryRatio']:
+            #     return False
+            #
+            # if threshold_dict['interestCoverageRatio'][0] \
+            #         < last_factor['interestCoverageRatio'] < threshold_dict['interestCoverageRatio'][1]:
+            #     return False
 
             return True
 
@@ -1410,9 +1413,9 @@ def main_signal():
 
 
 def main_single():
-    czsc_mongo = CzscMongo(code='apl8', freq='day', exchange='hkconnect')
+    czsc_mongo = CzscMongo(code='tl8', freq='5min', exchange='hkconnect')
     czsc_mongo.run()
-    # czsc_mongo.draw()
+    czsc_mongo.draw()
     czsc_mongo.to_csv()
     # czsc_mongo.to_json()
 
