@@ -337,7 +337,7 @@ class XdList(object):
             # 线段不存在，初始化线段，找4个点的最高和最低点组成线段
             bi_list = bi_list[:-1].copy()
             bi_list = sorted(bi_list, key=lambda x: x['value'], reverse=False)
-            if bi_list[0]['date'] < bi_list[-1]['date']:
+            if TradeDate(bi_list[0]['date']) < TradeDate(bi_list[-1]['date']):
                 xd_list.append(bi_list[0])
                 xd_list.append(bi_list[-1])
             else:
