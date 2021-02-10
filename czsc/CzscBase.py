@@ -295,14 +295,15 @@ class XdList(object):
         trade_date = self.trade_date
         xd = self.xd_list[-1]
         last_xd = self.xd_list[-2]
-        xd.update(pct_change=(xd['value'] - last_xd['value']) / last_xd['value'])
-
+        # xd.update(pct_change=(xd['value'] - last_xd['value']) / last_xd['value'])
+        #
         start = trade_date.index(last_xd['date'])
         end = trade_date.index(xd['date'])
         kn = end - start + 1
         fx_mark = kn * np.sign(xd.get('fx_mark', xd.get('direction', 0)))
-        macd = sum([x['macd'] for x in self.indicators.macd[start: end+1] if fx_mark * x['macd'] > 0])
-        xd.update(fx_mark=fx_mark, macd=macd, avg_macd=macd/kn)
+        # macd = sum([x['macd'] for x in self.indicators.macd[start: end+1] if fx_mark * x['macd'] > 0])
+        # xd.update(fx_mark=fx_mark, macd=macd, avg_macd=macd/kn)
+        xd.update(fx_mark=fx_mark)
 
     def update_xd(self):
         """更新笔分型序列
@@ -440,86 +441,87 @@ class XdList(object):
         线段更新后调用，判断是否出现买点
         """
         if len(self.zs_list) < 1:
-            return
+            return False
 
         zs = self.zs_list[-1]
         xd = self.xd_list[-1]
-        last_xd = self.xd_list[-2]
-
-        boll = self.indicators.boll[-1]
+        # last_xd = self.xd_list[-2]
+        #
+        # boll = self.indicators.boll[-1]
 
         sig = {
             'date': self.bars[-1]['date'],
             'real_loc': zs['real_loc'],
             'location': zs['location'],
             'weight': zs['weight'],
-            'fx_mark': xd['fx_mark'],
-            'last_mark': last_xd['fx_mark'],
-            'time_ratio': abs(xd['fx_mark'] / last_xd['fx_mark']) * 100,
-            'pct_change': xd['pct_change'] * 100,
-            'macd': xd['macd'],
-            'avg_macd': xd['avg_macd'],
+            # 'fx_mark': xd['fx_mark'],
+            # 'last_mark': last_xd['fx_mark'],
+            # 'time_ratio': abs(xd['fx_mark'] / last_xd['fx_mark']) * 100,
+            # 'pct_change': xd['pct_change'] * 100,
+            # 'macd': xd['macd'],
+            # 'avg_macd': xd['avg_macd'],
         }
 
         if xd['fx_mark'] > 0:  # 上升趋势
-            sig.update(GG_macd=zs['GG'][-1].get('macd', np.nan), GG_avg_macd=zs['GG'][-1].get('avg_macd', np.nan))
-            if zs['location'] > 0 and zs.get('zs_start', False):
-                sig.update(start_macd=zs['zs_start']['macd'], start_avg_macd=zs['zs_start']['avg_macd'])
+            # sig.update(GG_macd=zs['GG'][-1].get('macd', np.nan), GG_avg_macd=zs['GG'][-1].get('avg_macd', np.nan))
+            # if zs['location'] > 0 and zs.get('zs_start', False):
+            #     sig.update(start_macd=zs['zs_start']['macd'], start_avg_macd=zs['zs_start']['avg_macd'])
 
-            sig.update(boll=boll.get('UB', np.nan) / self.bars[-1]['high'] * 100 - 100)
+            # sig.update(boll=boll.get('UB', np.nan) / self.bars[-1]['high'] * 100 - 100)
 
             if xd['value'] > zs['GG'][-1]['value']:
                 xd_mark = -1  # 如果weight=1, 背驰，有可能1卖
-                resistance = np.nan
-                support = zs['GG'][-1]['value'] / xd['value'] - 1
+                # resistance = np.nan
+                # support = zs['GG'][-1]['value'] / xd['value'] - 1
             elif xd['value'] > zs['ZG']['value']:
                 xd_mark = -2  # 如果weight=1, 背驰，有可能2卖
-                resistance = zs['GG'][-1]['value'] / xd['value'] - 1
-                support = zs['ZG']['value'] / xd['value'] - 1
+                # resistance = zs['GG'][-1]['value'] / xd['value'] - 1
+                # support = zs['ZG']['value'] / xd['value'] - 1
             elif xd['value'] > zs['ZD']['value']:
                 xd_mark = -2.5
-                resistance = zs['ZG']['value'] / xd['value'] - 1
-                support = zs['ZD']['value'] / xd['value'] - 1
+                # resistance = zs['ZG']['value'] / xd['value'] - 1
+                # support = zs['ZD']['value'] / xd['value'] - 1
             elif xd['value'] > zs['DD'][-1]['value']:
                 xd_mark = -3  # 三卖
-                resistance = zs['ZD']['value'] / xd['value'] - 1
-                support = zs['DD'][-1]['value'] / xd['value'] - 1
+                # resistance = zs['ZD']['value'] / xd['value'] - 1
+                # support = zs['DD'][-1]['value'] / xd['value'] - 1
             else:
                 xd_mark = -4  # 三卖
-                resistance = zs['DD'][-1]['value'] / xd['value'] - 1
-                support = np.nan
+                # resistance = zs['DD'][-1]['value'] / xd['value'] - 1
+                # support = np.nan
 
         elif xd['fx_mark'] < 0:  # 下降趋势
-            sig.update(DD_macd=zs['DD'][-1].get('macd', np.nan), DD_avg_macd=zs['DD'][-1].get('avg_macd', np.nan))
-            if zs['location'] < 0 and zs.get('zs_start', False):
-                sig.update(start_macd=zs['zs_start']['macd'], start_avg_macd=zs['zs_start']['avg_macd'])
+            # sig.update(DD_macd=zs['DD'][-1].get('macd', np.nan), DD_avg_macd=zs['DD'][-1].get('avg_macd', np.nan))
+            # if zs['location'] < 0 and zs.get('zs_start', False):
+            #     sig.update(start_macd=zs['zs_start']['macd'], start_avg_macd=zs['zs_start']['avg_macd'])
 
-            sig.update(boll=100 - boll.get('LB', np.nan) / self.bars[-1]['low'] * 100)
+            # sig.update(boll=100 - boll.get('LB', np.nan) / self.bars[-1]['low'] * 100)
 
             if xd['value'] > zs['GG'][-1]['value']:
                 xd_mark = 4  # 三买
-                resistance = np.nan
-                support = zs['GG'][-1]['value'] / xd['value'] - 1
+                # resistance = np.nan
+                # support = zs['GG'][-1]['value'] / xd['value'] - 1
             elif xd['value'] > zs['ZG']['value']:
                 xd_mark = 3
-                resistance = zs['GG'][-1]['value'] / xd['value'] - 1
-                support = zs['ZG']['value'] / xd['value'] - 1
+                # resistance = zs['GG'][-1]['value'] / xd['value'] - 1
+                # support = zs['ZG']['value'] / xd['value'] - 1
             elif xd['value'] > zs['ZD']['value']:
                 xd_mark = 2.5
-                resistance = zs['ZG']['value'] / xd['value'] - 1
-                support = zs['ZD']['value'] / xd['value'] - 1
+                # resistance = zs['ZG']['value'] / xd['value'] - 1
+                # support = zs['ZD']['value'] / xd['value'] - 1
             elif xd['value'] > zs['DD'][-1]['value']:
                 xd_mark = 2  # 如果weight=1, 背驰，有可能2买
-                resistance = zs['ZD']['value'] / xd['value'] - 1
-                support = zs['DD'][-1]['value'] / xd['value'] - 1
+                # resistance = zs['ZD']['value'] / xd['value'] - 1
+                # support = zs['DD'][-1]['value'] / xd['value'] - 1
             else:
                 xd_mark = 1  # 如果weight=1, 背驰，有可能1买
-                resistance = zs['DD'][-1]['value'] / xd['value'] - 1
-                support = np.nan
+                # resistance = zs['DD'][-1]['value'] / xd['value'] - 1
+                # support = np.nan
         else:
             raise ValueError
 
-        sig.update(xd_mark=xd_mark, support=support * 100, resistance=resistance * 100)
+        # sig.update(xd_mark=xd_mark, support=support * 100, resistance=resistance * 100)
+        sig.update(xd_mark=xd_mark)
         self.sig_list.append(sig)
 
     def update(self):
@@ -728,6 +730,7 @@ class CzscBase:
         # 新增确定性的笔才处理段
         xd_list = self.xd_list
         result = True
+        index = 0
         while result:
             result = xd_list.update()
 
@@ -735,9 +738,23 @@ class CzscBase:
             # xd_list.update_sig(bars=self.bars, indicators=self.indicators)
             #
             # result = xd_list.update_xd(trade_date=self.trade_date)
+            # if result:
+            if len(xd_list.sig_list) > 0:
+                signal = xd_list.sig_list[-1]
+                if index == 0:
+                    signal.update(xd=0)
+                    self.sig_list.append(signal)
+                else:
+                    last_sig = self.sig_list[-1]
+                    last_sig.update(xd=index, xd_mark=signal['xd_mark'])
+                    last_sig['real_loc'] = last_sig['real_loc'] + signal['real_loc']
+                    last_sig['location'] = last_sig['location'] + signal['location']
+                    last_sig['weight'] = last_sig['weight'] + signal['weight']
+
             temp_list = xd_list
             xd_list = xd_list.next
             xd_list.prev = temp_list
+            index = index + 1
 
     #  必须实现,每次输入一个行情数据，然后调用update看是否需要更新
     def on_bar(self, bar):
@@ -750,7 +767,7 @@ class CzscBase:
 
 
 class CzscMongo(CzscBase):
-    def __init__(self, code='rul8', start=None, freq='day', exchange=None):
+    def __init__(self, code='rul8', start=None, end=None, freq='day', exchange=None):
         # 只处理一个品种
         super().__init__()
         self.code = code
@@ -766,19 +783,19 @@ class CzscMongo(CzscBase):
         elif start is None:
             start = '1990-01-01'
 
-        self.data = get_bar(code, start, freq=freq, exchange=exchange)
+        self.data = get_bar(code, start=start, end=end, freq=freq, exchange=exchange)
         # self.data = get_bar(code, start, end='2020-12-09', freq=freq, exchange=exchange)
 
     def draw(self, chart_path=None):
         chart = kline_pro(
             kline=self.bars, fx=self.fx_list,
-            bs=self.sig_list, xd=self.xd_list,
+            bs=[], xd=self.xd_list,
             # title=self.code+'_'+self.freq, width='1520px', height='580px'
             title=self.code+'_'+self.freq, width='2540px', height='850px'
         )
 
         if not chart_path:
-            chart_path = '{}.html'.format(self.code)
+            chart_path = '{}_{}.html'.format(self.code, self.freq)
         chart.render(chart_path)
         webbrowser.open(chart_path)
 
@@ -870,18 +887,22 @@ class CzscMongo(CzscBase):
             print(error)
 
     def to_csv(self):
-        xd = self.xd_list
-        index = 0
-        sig = []
-        while xd:
-            df = pd.DataFrame(xd.sig_list)
-            df['xd'] = index
-            sig.append(df)
-            xd = xd.next
-            index = index + 1
+        # xd = self.xd_list
+        # index = 0
+        # sig = []
+        # while xd:
+        #     df = pd.DataFrame(xd.sig_list)
+        #     df['xd'] = index
+        #     sig.append(df)
+        #     xd = xd.next
+        #     index = index + 1
+        #
+        # sig_df = pd.concat(sig).set_index(['date', 'xd']).sort_index()
+        # filename = '{}_{}.csv'.format(self.code, self.freq)
+        # sig_df.to_csv(filename)
 
-        sig_df = pd.concat(sig).set_index(['date', 'xd']).sort_index()
-        filename = '{}_{}.csv'.format(self.code, self.freq)
+        sig_df = pd.DataFrame(self.sig_list).set_index('date')
+        filename = '{}_{}_sig.csv'.format(self.code, self.freq)
         sig_df.to_csv(filename)
 
     def to_df(self):
@@ -1019,15 +1040,28 @@ def main_signal():
 
 
 def main_single():
-    # czsc_day = CzscMongo(code='tal8', freq='day', exchange='hkconnect')
-    # czsc_day.run()
-    # czsc_day.draw()
-    # czsc_day.to_csv()
-    czsc_min = CzscMongo(code='tal8', start='2021-01-26', freq='5min', exchange='hkconnect')
+    code = 'ful8'
+    exchange = 'sse'
+    end = '2021-08-27'
+    czsc_day = CzscMongo(code=code, end=end, freq='day', exchange=exchange)
+    czsc_day.run()
+    xd1_list = czsc_day.xd_list.next
+    xd1_mark = xd1_list.sig_list[-1]['xd_mark']
+    last_xd = xd1_list.xd_list[-1]
+    if last_xd['fx_mark'] * xd1_mark < 0:
+        last_xd = xd1_list.xd_list[-2]
+
+    start = last_xd['fx_start']
+
+    czsc_day.draw()
+    czsc_day.to_csv()
+    # czsc_day.to_json()
+
+    czsc_min = CzscMongo(code=code, start=start, end=end, freq='5min', exchange=exchange)
     czsc_min.run()
     czsc_min.draw()
-    # czsc_min.to_csv()
-    czsc_min.to_json()
+    czsc_min.to_csv()
+    # # czsc_min.to_json()
 
 
 if __name__ == '__main__':
