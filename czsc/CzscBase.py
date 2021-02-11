@@ -21,6 +21,7 @@
 # LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
+from datetime import datetime
 import json
 import logging
 import webbrowser
@@ -33,7 +34,7 @@ from czsc.Fetch.tdx import get_bar
 from czsc.Indicator import IndicatorSet
 from czsc.Utils.echarts_plot import kline_pro
 from czsc.Utils.logs import util_log_info
-from czsc.Utils.trade_date import TradeDate
+from czsc.Utils.trade_date import TradeDate, util_get_real_date
 from czsc.Utils.transformer import DataEncoder
 
 
@@ -948,7 +949,10 @@ def main_signal():
     from czsc.Fetch.tdx import SECURITY_DATAFRAME
 
     def inst_filter(security):
-        if security['instrument'] not in ['future', 'ETF', 'stock']:
+        # if security['instrument'] not in ['future', 'ETF', 'stock']:
+        #     return False
+
+        if security['instrument'] not in ['future']:
             return False
 
         if security['exchange'] in ['hkconnect']:
@@ -1021,6 +1025,9 @@ def main_signal():
     ]
 
     sig_list = []
+
+    last_trade_date = util_get_real_date(datetime.today().strftime('%Y-%m-%d'))
+
     for code, item in security_df.iterrows():
         util_log_info("============={} {} Signal==========".format(code, item['exchange']))
         try:
@@ -1040,7 +1047,7 @@ def main_signal():
 
 
 def main_single():
-    code = 'ful8'
+    code = '603058'
     exchange = 'sse'
     end = '2021-08-27'
     czsc_day = CzscMongo(code=code, end=end, freq='day', exchange=exchange)
@@ -1053,8 +1060,8 @@ def main_single():
 
     start = last_xd['fx_start']
 
-    czsc_day.draw()
-    czsc_day.to_csv()
+    # czsc_day.draw()
+    # czsc_day.to_csv()
     # czsc_day.to_json()
 
     czsc_min = CzscMongo(code=code, start=start, end=end, freq='5min', exchange=exchange)
@@ -1066,5 +1073,5 @@ def main_single():
 
 if __name__ == '__main__':
     # main_consumer()
-    # main_signal()
-    main_single()
+    main_signal()
+    # main_single()

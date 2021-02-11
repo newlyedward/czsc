@@ -2,7 +2,7 @@
 import functools
 import time
 import pandas as pd
-from datetime import datetime, time
+from datetime import datetime, time, timedelta
 
 from czsc.Utils import util_log_info
 
@@ -7676,7 +7676,7 @@ def util_date_int2str(int_date):
         return date
 
 
-def util_get_real_date(date, trade_list=trade_date_sse, towards=-1):
+def util_get_real_date(date, trade_list=None, towards=-1):
     """
     explanation:
         获取真实的交易日期
@@ -7695,22 +7695,21 @@ def util_get_real_date(date, trade_list=trade_date_sse, towards=-1):
             类型: int
             参数支持: [1， -1]
     """
+    if trade_list is None:
+        trade_list = trade_date_sse
+
     date = str(date)[0:10]
     if towards == 1:
         while date not in trade_list:
             date = str(
-                datetime.datetime.strptime(str(date)[0:10],
-                                           '%Y-%m-%d') +
-                datetime.timedelta(days=1)
+                datetime.strptime(str(date)[0:10], '%Y-%m-%d') +  timedelta(days=1)
             )[0:10]
         else:
             return str(date)[0:10]
     elif towards == -1:
         while date not in trade_list:
             date = str(
-                datetime.datetime.strptime(str(date)[0:10],
-                                           '%Y-%m-%d') -
-                datetime.timedelta(days=1)
+                datetime.strptime(str(date)[0:10],'%Y-%m-%d') - timedelta(days=1)
             )[0:10]
         else:
             return str(date)[0:10]
