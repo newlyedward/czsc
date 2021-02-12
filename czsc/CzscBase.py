@@ -711,7 +711,8 @@ class CzscBase:
 
         self.trade_date = []  # 用来查找索引
         self.bars = []
-        # self.indicators = IndicatorSet(self.bars)
+        self.indicators = IndicatorSet(self.bars)
+        # self.indicators = None
         self.new_bars = []
         self.fx_list = []
         self.xd_list = XdList(self.bars, self.indicators, self.trade_date)  # bi作为线段的head
@@ -721,7 +722,10 @@ class CzscBase:
         # 有包含关系时，不可能有分型出现，不出现分型时才需要
         # self.indicators.update()
 
-        update_fx(bars=self.bars, new_bars=self.new_bars, fx_list=self.fx_list, trade_date=self.trade_date)
+        try:
+            update_fx(bars=self.bars, new_bars=self.new_bars, fx_list=self.fx_list, trade_date=self.trade_date)
+        except:
+            print('error')
 
         if not update_bi(
                 new_bars=self.new_bars, fx_list=self.fx_list, bi_list=self.xd_list, trade_date=self.trade_date
@@ -788,6 +792,9 @@ class CzscMongo(CzscBase):
         # self.data = get_bar(code, start, end='2020-12-09', freq=freq, exchange=exchange)
 
     def draw(self, chart_path=None):
+        if len(self.bars) < 1:
+            return
+
         chart = kline_pro(
             kline=self.bars, fx=self.fx_list,
             bs=[], xd=self.xd_list,
@@ -817,6 +824,9 @@ class CzscMongo(CzscBase):
             util_log_info(error)
 
     def run(self, start=None, end=None):
+        if self.data.empty:
+            util_log_info('{} {} quote data is empty'.format(self.code, self.freq))
+            return
 
         self.data.apply(self.on_bar, axis=1)
         # self.save()
@@ -901,6 +911,8 @@ class CzscMongo(CzscBase):
         # sig_df = pd.concat(sig).set_index(['date', 'xd']).sort_index()
         # filename = '{}_{}.csv'.format(self.code, self.freq)
         # sig_df.to_csv(filename)
+        if len(self.sig_list) < 1:
+            return
 
         sig_df = pd.DataFrame(self.sig_list).set_index('date')
         filename = '{}_{}_sig.csv'.format(self.code, self.freq)
@@ -928,6 +940,10 @@ class CzscMongo(CzscBase):
 
     def to_json(self):
         xd = self.xd_list
+
+        if len(xd) < 1:
+            return
+
         index = 0
         data = []
         while xd:
@@ -1107,8 +1123,8 @@ def main_signal():
 
 
 def main_single():
-    code = '603058'
-    exchange = 'sse'
+    code = 'CYl9'
+    exchange = 'czce'
     end = '2021-08-27'
     czsc_day = CzscMongo(code=code, end=end, freq='day', exchange=exchange)
     czsc_day.run()
@@ -1120,8 +1136,8 @@ def main_single():
 
     start = last_xd['fx_start']
 
-    # czsc_day.draw()
-    # czsc_day.to_csv()
+    czsc_day.draw()
+    czsc_day.to_csv()
     # czsc_day.to_json()
 
     czsc_min = CzscMongo(code=code, start=start, end=end, freq='5min', exchange=exchange)
@@ -1133,5 +1149,5 @@ def main_single():
 
 if __name__ == '__main__':
     # main_consumer()
-    main_signal()
-    # main_single()
+    # main_signal()
+    main_single()
