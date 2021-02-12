@@ -391,7 +391,8 @@ class XdList(object):
                                 bi_list[index]['value'] > xd['value']:
                             return False
                     except Exception as err:
-                        util_log_info('Last xd {}:{}'.format(last_xd['date'], err))
+                        pass
+                        # util_log_info('Last xd {}:{}'.format(last_xd['date'], err))
 
                     while TradeDate(bi['date']) > TradeDate(last_xd['date']):
                         if xd['value'] < bi['value']:
@@ -425,7 +426,8 @@ class XdList(object):
                                 bi_list[index]['value'] < xd['value']:
                             return False
                     except Exception as err:
-                        util_log_info('Last xd {}:{}'.format(last_xd['date'], err))
+                        pass
+                        # util_log_info('Last xd {}:{}'.format(last_xd['date'], err))
 
                     while TradeDate(bi['date']) > TradeDate(last_xd['date']):
                         if xd['value'] > bi['value']:
@@ -968,13 +970,14 @@ def main_signal():
         # if security['instrument'] not in ['future', 'ETF', 'stock']:
         #     return False
 
-        if security['instrument'] not in ['future']:
+        if security['instrument'] not in ['stock']:
             return False
 
         if security['exchange'] in ['hkconnect']:
             return True
 
         code = security.name
+
         # today = datetime.date.today()
         # year = today.year - 2
         # start = datetime.date(year, today.month, today.day).strftime('%Y-%m-%d')
@@ -1028,11 +1031,11 @@ def main_signal():
             #         < last_factor['interestCoverageRatio'] < threshold_dict['interestCoverageRatio'][1]:
             #     return False
 
-            return True
+            return False
 
-        if security['exchange'] in ['czce', 'dce', 'shfe', 'cffex']:
-            if code[-2:] in ['L8', 'L9']:
-                return True
+        # if security['exchange'] in ['czce', 'dce', 'shfe', 'cffex']:
+        #     if code[-2:] in ['L8', 'L9']:
+        #         return True
 
         return False
 
@@ -1063,14 +1066,23 @@ def main_signal():
         last_day_sig = sig_day_list[-1]
 
         if last_day_sig['date'] < last_trade_date:
+            util_log_info(
+                "===={} {} last Signal {}====".format(code, exchange, last_day_sig['date'].strftime('%Y-%m-%d'))
+            )
             continue
 
             # 取周线级别的起点
         xd1_list = czsc_day.xd_list.next
-        xd1_mark = last_day_sig['xd_mark']
+
+        if len(xd1_list) < 1:
+            continue
+
         last_xd = xd1_list.xd_list[-1]
+        xd1_mark = last_day_sig['xd_mark']
 
         if last_xd['fx_mark'] * xd1_mark < 0:
+            if len(xd1_list) < 2:
+                continue
             last_xd = xd1_list.xd_list[-2]
 
         start = last_xd['fx_start']
@@ -1092,7 +1104,7 @@ def main_signal():
             continue
 
         df = pd.DataFrame(sig_min_list).set_index('date')
-        df = df[df.index > last_trade_date]    # 5分钟数据有可能缺失，造成实际没数据
+        df = df[df.index > last_trade_date]  # 5分钟数据有可能缺失，造成实际没数据
 
         if df.empty:
             util_log_info("===Please Download {} {} 5min Data===".format(code, exchange))
@@ -1112,19 +1124,24 @@ def main_signal():
         index = index + 1
         util_log_info("==={:=>4d}. {} {} Have a Signal=======".format(index, code, exchange))
 
+    if len(sig_list) < 1:
+        util_log_info("========There are 0 Signal=======")
+
     df = pd.DataFrame(sig_list)
     order = [
         'code',
         'xd', 'real_loc', 'xd_mark', 'weight', 'location',
         'xd_min', 'real_loc_min', 'xd_mark_min', 'weight_min', 'location_min',
     ]
-    df = df[order].set_index(['xd', 'real_loc']).sort_index(ascending=[False, True])
+    df = df[order].sort_values(by=['xd', 'real_loc'], ascending=[False, True])
     df.to_csv('signal_{}.csv'.format(last_trade_date.strftime('%Y%m%d')))
+
+    util_log_info("===There are {} Signal=======".format(index))
 
 
 def main_single():
-    code = 'CYl9'
-    exchange = 'czce'
+    code = '300999'
+    exchange = 'szse'
     end = '2021-08-27'
     czsc_day = CzscMongo(code=code, end=end, freq='day', exchange=exchange)
     czsc_day.run()
@@ -1149,5 +1166,5 @@ def main_single():
 
 if __name__ == '__main__':
     # main_consumer()
-    # main_signal()
-    main_single()
+    main_signal()
+    # main_single()
