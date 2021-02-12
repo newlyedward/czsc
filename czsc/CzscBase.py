@@ -711,7 +711,7 @@ class CzscBase:
 
         self.trade_date = []  # 用来查找索引
         self.bars = []
-        self.indicators = IndicatorSet(self.bars)
+        # self.indicators = IndicatorSet(self.bars)
         self.new_bars = []
         self.fx_list = []
         self.xd_list = XdList(self.bars, self.indicators, self.trade_date)  # bi作为线段的head
@@ -719,7 +719,7 @@ class CzscBase:
 
     def update(self):
         # 有包含关系时，不可能有分型出现，不出现分型时才需要
-        self.indicators.update()
+        # self.indicators.update()
 
         update_fx(bars=self.bars, new_bars=self.new_bars, fx_list=self.fx_list, trade_date=self.trade_date)
 
@@ -792,7 +792,7 @@ class CzscMongo(CzscBase):
             kline=self.bars, fx=self.fx_list,
             bs=[], xd=self.xd_list,
             # title=self.code+'_'+self.freq, width='1520px', height='580px'
-            title=self.code+'_'+self.freq, width='2540px', height='850px'
+            title=self.code + '_' + self.freq, width='2540px', height='850px'
         )
 
         if not chart_path:
@@ -1028,10 +1028,13 @@ def main_signal():
 
     last_trade_date = pd.to_datetime(util_get_real_date(datetime.today().strftime('%Y-%m-%d')))
 
+    index = 0
+
     for code, item in security_df.iterrows():
-        util_log_info("============={} {} Signal==========".format(code, item['exchange']))
+        exchange = item['exchange']
+        util_log_info("============={} {} Signal==========".format(code, exchange))
         try:
-            czsc_day = CzscMongo(code=code, freq='day', exchange=item['exchange'])
+            czsc_day = CzscMongo(code=code, freq='day', exchange=exchange)
         except Exception as error:
             util_log_info("{} : {}".format(code, error))
             continue
@@ -1041,24 +1044,64 @@ def main_signal():
         if len(sig_day_list) < 1:
             continue
 
-        last_sig = sig_day_list[-1]
+        last_day_sig = sig_day_list[-1]
 
-        if last_sig['date'] < last_trade_date:
+        if last_day_sig['date'] < last_trade_date:
             continue
 
-        # xd1_list = czsc_day.xd_list.next
+            # 取周线级别的起点
+        xd1_list = czsc_day.xd_list.next
+        xd1_mark = last_day_sig['xd_mark']
+        last_xd = xd1_list.xd_list[-1]
 
-        last_sig.update(code=code, exchange=item['exchange'], freq='day')
+        if last_xd['fx_mark'] * xd1_mark < 0:
+            last_xd = xd1_list.xd_list[-2]
 
-        sig_list.append(last_sig)
-        # df = czsc_day.to_df()
-        # if df.empty:
-        #     continue
-        # df = df[df.index.get_level_values(0) > pd.to_datetime('2021-01-21')]
-        # sig_list.append(df)
+        start = last_xd['fx_start']
+
+        czsc_min = CzscMongo(code=code, start=start, freq='5min', exchange=exchange)
+        czsc_min.run()
+
+        sig_min_list = czsc_min.sig_list
+
+        if len(sig_min_list) < 1:
+            continue
+
+        last_min_sig = sig_min_list[-1]
+
+        # if 'date' not in last_min_sig:
+        #     print('error')
+
+        if last_min_sig['date'] < last_trade_date:
+            continue
+
+        df = pd.DataFrame(sig_min_list).set_index('date')
+        df = df[df.index > last_trade_date]    # 5分钟数据有可能缺失，造成实际没数据
+
+        if df.empty:
+            util_log_info("===Please Download {} {} 5min Data===".format(code, exchange))
+            continue
+
+        df = df.sort_values(by=['xd', 'real_loc', 'weight'], ascending=[False, xd1_mark > 0, True])
+
+        last_day_sig.update(
+            xd_min=df.iloc[0]['xd'], real_loc_min=df.iloc[0]['real_loc'],
+            weight_min=df.iloc[0]['weight'], location_min=df.iloc[0]['location'],
+            xd_mark_min=df.iloc[0]['xd_mark'],
+        )
+        last_day_sig.update(code=code, exchange=exchange)
+
+        sig_list.append(last_day_sig)
+
+        index = index + 1
+        util_log_info("==={:=>4d}. {} {} Have a Signal=======".format(index, code, exchange))
 
     df = pd.DataFrame(sig_list)
-    order = ['xd', 'real_loc', 'xd_mark', 'weight', 'location', 'code', 'freq', 'date']
+    order = [
+        'code',
+        'xd', 'real_loc', 'xd_mark', 'weight', 'location',
+        'xd_min', 'real_loc_min', 'xd_mark_min', 'weight_min', 'location_min',
+    ]
     df = df[order].set_index(['xd', 'real_loc']).sort_index(ascending=[False, True])
     df.to_csv('signal_{}.csv'.format(last_trade_date.strftime('%Y%m%d')))
 
