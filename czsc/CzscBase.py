@@ -1026,24 +1026,41 @@ def main_signal():
 
     sig_list = []
 
-    last_trade_date = util_get_real_date(datetime.today().strftime('%Y-%m-%d'))
+    last_trade_date = pd.to_datetime(util_get_real_date(datetime.today().strftime('%Y-%m-%d')))
 
     for code, item in security_df.iterrows():
         util_log_info("============={} {} Signal==========".format(code, item['exchange']))
         try:
-            czsc_mongo = CzscMongo(code=code, freq='day', exchange=item['exchange'])
+            czsc_day = CzscMongo(code=code, freq='day', exchange=item['exchange'])
         except Exception as error:
             util_log_info("{} : {}".format(code, error))
             continue
-        czsc_mongo.run()
-        df = czsc_mongo.to_df()
-        if df.empty:
-            continue
-        df = df[df.index.get_level_values(0) > pd.to_datetime('2021-01-21')]
-        sig_list.append(df)
+        czsc_day.run()
+        sig_day_list = czsc_day.sig_list
 
-    df = pd.concat(sig_list)
-    df.to_csv('signal.csv')
+        if len(sig_day_list) < 1:
+            continue
+
+        last_sig = sig_day_list[-1]
+
+        if last_sig['date'] < last_trade_date:
+            continue
+
+        # xd1_list = czsc_day.xd_list.next
+
+        last_sig.update(code=code, exchange=item['exchange'], freq='day')
+
+        sig_list.append(last_sig)
+        # df = czsc_day.to_df()
+        # if df.empty:
+        #     continue
+        # df = df[df.index.get_level_values(0) > pd.to_datetime('2021-01-21')]
+        # sig_list.append(df)
+
+    df = pd.DataFrame(sig_list)
+    order = ['xd', 'real_loc', 'xd_mark', 'weight', 'location', 'code', 'freq', 'date']
+    df = df[order].set_index(['xd', 'real_loc']).sort_index(ascending=[False, True])
+    df.to_csv('signal_{}.csv'.format(last_trade_date.strftime('%Y%m%d')))
 
 
 def main_single():
