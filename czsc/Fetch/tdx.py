@@ -77,13 +77,13 @@ def _get_sh_sz_list():
     SH_CODE_HEAD_TO_TYPE = {
         '60': 'stock',
         '68': 'stock',  # 科创板
-        '90': 'stock',  # B股
+        '90': 'B stock',  # B股
         '00': 'index',
         '88': 'index',
         '99': 'index',
         '50': 'fund',
         '51': 'fund',
-        '58': 'ETF',   # 科创板ETF
+        '58': 'ETF',  # 科创板ETF
         '20': 'bond',  # 国债逆回购
         '01': 'bond',  # 贴债
         '02': 'bond',
@@ -116,7 +116,7 @@ def _get_sh_sz_list():
     SZ_CODE_HEAD_TO_TYPE = {
         '00': 'stock',  # 中小板 主板
         '30': 'stock',  # 创业板
-        '20': 'stock',  # B股
+        '20': 'B stock',  # B股
         '39': 'index',
         '15': 'fund',
         '16': 'fund',
@@ -150,11 +150,11 @@ def _get_ds_list():
         '7': {'exchange': 'cffex', 'instrument': 'option'},
         '8': {'exchange': 'sse', 'instrument': 'option'},
         '9': {'exchange': 'szse', 'instrument': 'option'},
-        '27': {'exchange': 'hkse', 'instrument': 'index'},    # 香港指数
+        '27': {'exchange': 'hkse', 'instrument': 'index'},  # 香港指数
         '28': {'exchange': 'czce', 'instrument': 'future'},
         '29': {'exchange': 'dce', 'instrument': 'future'},
         '30': {'exchange': 'shfe', 'instrument': 'future'},
-        '31': {'exchange': 'hkse', 'instrument': 'stock'},    # 香港主板
+        '31': {'exchange': 'hkse', 'instrument': 'stock'},  # 香港主板
         '33': {'exchange': 'sse szse', 'instrument': 'OEF'},  # 开放式基金
         '34': {'exchange': 'sse szse', 'instrument': 'MMF'},  # 货币型基金
         '44': {'exchange': 'neeq', 'instrument': 'stock'},  # 股转系统
@@ -170,7 +170,7 @@ def _get_ds_list():
 
     pattern = "^(?P<tdx_code>\d{1,3})#(?P<code>.+)\.day"
     data = [re.match(pattern, x) for x in ds_list]
-    try:    # 注释条码用来显示pattern不能识别的文件名
+    try:  # 注释条码用来显示pattern不能识别的文件名
         # for i, x in enumerate(Data):
         #     if not x:
         #         util_log_info('{}'.format(ds_list[i]))

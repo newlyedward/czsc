@@ -963,8 +963,133 @@ class CzscMongo(CzscBase):
             json.dump(data, write_file, indent=4, sort_keys=True, cls=DataEncoder)
 
 
+def calculate_bs_signals(security_df: pd.DataFrame, last_trade_date=None):
+
+    sig_list = []
+
+    if last_trade_date is None:
+        last_trade_date = pd.to_datetime(util_get_real_date(datetime.today().strftime('%Y-%m-%d')))
+
+    index = 0
+
+    for code, item in security_df.iterrows():
+        exchange = item['exchange']
+        util_log_info("============={} {} Signal==========".format(code, exchange))
+        try:
+            czsc_day = CzscMongo(code=code, freq='day', exchange=exchange)
+        except Exception as error:
+            util_log_info("{} : {}".format(code, error))
+            continue
+
+        if len(czsc_day.data) < 1:
+            util_log_info("==========={} {} 0 Quotes==========".format(code, exchange))
+            continue
+
+        if czsc_day.data.iloc[-1]['date'] < last_trade_date:
+            util_log_info(
+                "=={} {} last trade date {}==".format(
+                    code, exchange, czsc_day.data.iloc[-1]['date'].strftime('%Y-%m-%d'))
+            )
+            continue
+
+        czsc_day.run()
+        sig_day_list = czsc_day.sig_list
+
+        if len(sig_day_list) < 1:
+            continue
+
+        last_day_sig = sig_day_list[-1]
+
+        if last_day_sig['date'] < last_trade_date:
+            util_log_info(
+                "===={} {} last Signal {}====".format(code, exchange, last_day_sig['date'].strftime('%Y-%m-%d'))
+            )
+            continue
+
+            # 取周线级别的起点
+        xd1_list = czsc_day.xd_list.next
+
+        if len(xd1_list) < 1:
+            continue
+
+        last_xd = xd1_list.xd_list[-1]
+        xd1_mark = last_day_sig['xd_mark']
+
+        if last_xd['fx_mark'] * xd1_mark < 0:
+            if len(xd1_list) < 2:
+                continue
+            last_xd = xd1_list.xd_list[-2]
+
+        start = last_xd['fx_start']
+
+        czsc_min = CzscMongo(code=code, start=start, freq='5min', exchange=exchange)
+
+        if len(czsc_min.data) < 1:
+            util_log_info("========={} {} 0 5min Quotes========".format(code, exchange))
+            continue
+
+        if czsc_min.data.iloc[-1]['date'] < last_trade_date:
+            util_log_info(
+                "==Please Update {} {} 5min Quotes from {}==".format(
+                    code, exchange, czsc_day.data.iloc[-1]['date'].strftime('%Y-%m-%d'))
+            )
+            continue
+
+        czsc_min.run()
+
+        sig_min_list = czsc_min.sig_list
+
+        if len(sig_min_list) < 1:
+            continue
+
+        last_min_sig = sig_min_list[-1]
+
+        if last_min_sig['date'] < last_trade_date:
+            continue
+
+        df = pd.DataFrame(sig_min_list).set_index('date')
+        df = df[df.index > last_trade_date]  # 5分钟数据有可能缺失，造成实际没数据
+
+        if df.empty:
+            util_log_info("===Please Download {} {} 5min Data===".format(code, exchange))
+            continue
+
+        df = df.sort_values(by=['xd', 'real_loc', 'weight'], ascending=[False, xd1_mark > 0, True])
+
+        last_day_sig.update(
+            xd_min=df.iloc[0]['xd'], real_loc_min=df.iloc[0]['real_loc'],
+            weight_min=df.iloc[0]['weight'], location_min=df.iloc[0]['location'],
+            xd_mark_min=df.iloc[0]['xd_mark'],
+        )
+        last_day_sig.update(code=code, exchange=exchange)
+
+        sig_list.append(last_day_sig)
+
+        index = index + 1
+        util_log_info("==={:=>4d}. {} {} Have a Signal=======".format(index, code, exchange))
+
+    if len(sig_list) < 1:
+        util_log_info("========There are 0 Signal=======")
+        return None
+
+    df = pd.DataFrame(sig_list)
+    order = [
+        'code',
+        'xd', 'real_loc', 'xd_mark', 'weight', 'location',
+        'xd_min', 'real_loc_min', 'xd_mark_min', 'weight_min', 'location_min',
+    ]
+    df = df[order].sort_values(by=['xd', 'real_loc'], ascending=[False, True])
+
+    util_log_info("===There are {} Signal=======".format(index))
+    return df
+
+
 def main_signal():
     from czsc.Fetch.tdx import SECURITY_DATAFRAME
+
+    security_class = [
+        {'exchange': ['czce', 'dce', 'shfe', 'cffex'], 'instrument': ['future'], 'code': ['L8', 'L9']}
+    ]
 
     def inst_filter(security):
         # if security['instrument'] not in ['future', 'ETF', 'stock']:
@@ -1043,100 +1168,10 @@ def main_signal():
         SECURITY_DATAFRAME.apply(inst_filter, axis=1)
     ]
 
-    sig_list = []
-
     last_trade_date = pd.to_datetime(util_get_real_date(datetime.today().strftime('%Y-%m-%d')))
 
-    index = 0
-
-    for code, item in security_df.iterrows():
-        exchange = item['exchange']
-        util_log_info("============={} {} Signal==========".format(code, exchange))
-        try:
-            czsc_day = CzscMongo(code=code, freq='day', exchange=exchange)
-        except Exception as error:
-            util_log_info("{} : {}".format(code, error))
-            continue
-        czsc_day.run()
-        sig_day_list = czsc_day.sig_list
-
-        if len(sig_day_list) < 1:
-            continue
-
-        last_day_sig = sig_day_list[-1]
-
-        if last_day_sig['date'] < last_trade_date:
-            util_log_info(
-                "===={} {} last Signal {}====".format(code, exchange, last_day_sig['date'].strftime('%Y-%m-%d'))
-            )
-            continue
-
-            # 取周线级别的起点
-        xd1_list = czsc_day.xd_list.next
-
-        if len(xd1_list) < 1:
-            continue
-
-        last_xd = xd1_list.xd_list[-1]
-        xd1_mark = last_day_sig['xd_mark']
-
-        if last_xd['fx_mark'] * xd1_mark < 0:
-            if len(xd1_list) < 2:
-                continue
-            last_xd = xd1_list.xd_list[-2]
-
-        start = last_xd['fx_start']
-
-        czsc_min = CzscMongo(code=code, start=start, freq='5min', exchange=exchange)
-        czsc_min.run()
-
-        sig_min_list = czsc_min.sig_list
-
-        if len(sig_min_list) < 1:
-            continue
-
-        last_min_sig = sig_min_list[-1]
-
-        # if 'date' not in last_min_sig:
-        #     print('error')
-
-        if last_min_sig['date'] < last_trade_date:
-            continue
-
-        df = pd.DataFrame(sig_min_list).set_index('date')
-        df = df[df.index > last_trade_date]  # 5分钟数据有可能缺失，造成实际没数据
-
-        if df.empty:
-            util_log_info("===Please Download {} {} 5min Data===".format(code, exchange))
-            continue
-
-        df = df.sort_values(by=['xd', 'real_loc', 'weight'], ascending=[False, xd1_mark > 0, True])
-
-        last_day_sig.update(
-            xd_min=df.iloc[0]['xd'], real_loc_min=df.iloc[0]['real_loc'],
-            weight_min=df.iloc[0]['weight'], location_min=df.iloc[0]['location'],
-            xd_mark_min=df.iloc[0]['xd_mark'],
-        )
-        last_day_sig.update(code=code, exchange=exchange)
-
-        sig_list.append(last_day_sig)
-
-        index = index + 1
-        util_log_info("==={:=>4d}. {} {} Have a Signal=======".format(index, code, exchange))
-
-    if len(sig_list) < 1:
-        util_log_info("========There are 0 Signal=======")
-
-    df = pd.DataFrame(sig_list)
-    order = [
-        'code',
-        'xd', 'real_loc', 'xd_mark', 'weight', 'location',
-        'xd_min', 'real_loc_min', 'xd_mark_min', 'weight_min', 'location_min',
-    ]
-    df = df[order].sort_values(by=['xd', 'real_loc'], ascending=[False, True])
+    df = calculate_bs_signals(security_df, last_trade_date)
     df.to_csv('signal_{}.csv'.format(last_trade_date.strftime('%Y%m%d')))
-
-    util_log_info("===There are {} Signal=======".format(index))
 
 
 def main_single():
