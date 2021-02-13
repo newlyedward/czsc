@@ -21,6 +21,7 @@
 # LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
+import re
 from datetime import datetime
 import json
 import logging
@@ -964,7 +965,6 @@ class CzscMongo(CzscBase):
 
 
 def calculate_bs_signals(security_df: pd.DataFrame, last_trade_date=None):
-
     sig_list = []
 
     if last_trade_date is None:
@@ -1061,7 +1061,15 @@ def calculate_bs_signals(security_df: pd.DataFrame, last_trade_date=None):
             weight_min=df.iloc[0]['weight'], location_min=df.iloc[0]['location'],
             xd_mark_min=df.iloc[0]['xd_mark'],
         )
-        last_day_sig.update(code=code, exchange=exchange)
+
+        if item['instrument'] == 'future':
+            amount = czsc_day.bars[-1]['volume']
+        elif exchange in ['hkconnect']:
+            amount = czsc_day.bars[-1]['hk_stock_amount']
+        else:
+            amount = czsc_day.bars[-1]['amount']
+
+        last_day_sig.update(amount=amount, code=code, exchange=exchange)
 
         sig_list.append(last_day_sig)
 
@@ -1077,6 +1085,7 @@ def calculate_bs_signals(security_df: pd.DataFrame, last_trade_date=None):
         'code',
         'xd', 'real_loc', 'xd_mark', 'weight', 'location',
         'xd_min', 'real_loc_min', 'xd_mark_min', 'weight_min', 'location_min',
+        'amount',
     ]
     df = df[order].sort_values(by=['xd', 'real_loc'], ascending=[False, True])
 
@@ -1087,91 +1096,35 @@ def calculate_bs_signals(security_df: pd.DataFrame, last_trade_date=None):
 def main_signal():
     from czsc.Fetch.tdx import SECURITY_DATAFRAME
 
-    security_class = [
-        {'exchange': ['czce', 'dce', 'shfe', 'cffex'], 'instrument': ['future'], 'code': ['L8', 'L9']}
+    security_classes = [
+        # {
+        #     'name': 'future',
+        #     'exchange': ['czce', 'dce', 'shfe', 'cffex'], 'instrument': ['future'], 'code': "^\w+L[89]$"
+        # },
+        # {'name': 'stock', 'exchange': ['sse', 'szse'], 'instrument': ['stock']},
+        {'name': 'hkconnect', 'exchange': ['hkconnect'], 'instrument': ['stock']},
     ]
 
     def inst_filter(security):
-        # if security['instrument'] not in ['future', 'ETF', 'stock']:
-        #     return False
+        for security_class in security_classes:
+            if security['exchange'] in security_class['exchange'] and \
+                    security['instrument'] in security_class['instrument']:
+                if 'code' in security_class:
+                    if re.match(security_class['code'], security.name) is None:
+                        continue
+                return security_class['name']
 
-        if security['instrument'] not in ['stock']:
-            return False
+        return np.nan
 
-        if security['exchange'] in ['hkconnect']:
-            return True
-
-        code = security.name
-
-        # today = datetime.date.today()
-        # year = today.year - 2
-        # start = datetime.date(year, today.month, today.day).strftime('%Y-%m-%d')
-        if security['exchange'] in ['sse', 'szse']:
-            # if security['instrument'] not in ['stock']:
-            #     return True
-            #
-            # df = fetch_financial_report(code, start=start)
-            # try:
-            #     findata = FinancialStruct(df)
-            # except:
-            #     util_log_info("Cant get {} financial data, maybe not list in market".format(code))
-            #     return False
-            #
-            # # B 股，2，9开头的剔除掉
-            # factor = findata.financial_factor
-            # # 营业收入＜1亿
-            # if df.iloc[-1]['operatingRevenue'] < 100000000:
-            #     return False
-            #
-            # last_factor = factor.iloc[-1]
-            # if last_factor['ROIC'] < threshold_dict['ROIC']:
-            #     return False
-            #
-            # if last_factor['grossProfitMargin'] < threshold_dict['grossProfitMargin']:
-            #     return False
-            #
-            # if last_factor['netProfitMargin'] < threshold_dict['netProfitMargin']:
-            #     return False
-            #
-            # if last_factor['netProfitCashRatio'] < threshold_dict['netProfitCashRatio']:
-            #     return False
-            #
-            # if last_factor['operatingIncomeGrowth'] < threshold_dict['operatingIncomeGrowth']:
-            #     return False
-            #
-            # if last_factor['continuedProfitGrowth'] < threshold_dict['continuedProfitGrowth']:
-            #     return False
-            #
-            # if last_factor['assetsLiabilitiesRatio'] > threshold_dict['assetsLiabilitiesRatio']:
-            #     return False
-            #
-            # # 以下三个指标不适用金融和地产行业
-            # if last_factor['cashRatio'] < threshold_dict['cashRatio']:
-            #     return False
-            #
-            # if last_factor['inventoryRatio'] > threshold_dict['inventoryRatio']:
-            #     return False
-            #
-            # if threshold_dict['interestCoverageRatio'][0] \
-            #         < last_factor['interestCoverageRatio'] < threshold_dict['interestCoverageRatio'][1]:
-            #     return False
-
-            return False
-
-        # if security['exchange'] in ['czce', 'dce', 'shfe', 'cffex']:
-        #     if code[-2:] in ['L8', 'L9']:
-        #         return True
-
-        return False
-
-    security_df = SECURITY_DATAFRAME[
-        SECURITY_DATAFRAME.apply(inst_filter, axis=1)
-    ]
+    security_df = SECURITY_DATAFRAME
+    security_df['class'] = SECURITY_DATAFRAME.apply(inst_filter, axis=1)
 
     last_trade_date = pd.to_datetime(util_get_real_date(datetime.today().strftime('%Y-%m-%d')))
 
-    df = calculate_bs_signals(security_df, last_trade_date)
-    df.to_csv('signal_{}.csv'.format(last_trade_date.strftime('%Y%m%d')))
+    for security_class in security_classes:
+        class_name = security_class['name']
+        df = calculate_bs_signals(security_df[security_df['class'] == class_name], last_trade_date)
+        df.to_csv('{}_signal_{}.csv'.format(class_name, last_trade_date.strftime('%Y%m%d')), index=False)
 
 
 def main_single():
