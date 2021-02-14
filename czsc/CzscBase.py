@@ -970,13 +970,15 @@ def calculate_bs_signals(security_df: pd.DataFrame, last_trade_date=None):
     if last_trade_date is None:
         last_trade_date = pd.to_datetime(util_get_real_date(datetime.today().strftime('%Y-%m-%d')))
 
+    last_trade_time = datetime(last_trade_date.year, last_trade_date.month, last_trade_date.day, 20)
+
     index = 0
 
     for code, item in security_df.iterrows():
         exchange = item['exchange']
         util_log_info("============={} {} Signal==========".format(code, exchange))
         try:
-            czsc_day = CzscMongo(code=code, freq='day', exchange=exchange)
+            czsc_day = CzscMongo(code=code, end=last_trade_date, freq='day', exchange=exchange)
         except Exception as error:
             util_log_info("{} : {}".format(code, error))
             continue
@@ -1022,7 +1024,7 @@ def calculate_bs_signals(security_df: pd.DataFrame, last_trade_date=None):
 
         start = last_xd['fx_start']
 
-        czsc_min = CzscMongo(code=code, start=start, freq='5min', exchange=exchange)
+        czsc_min = CzscMongo(code=code, start=start, end=last_trade_time, freq='5min', exchange=exchange)
 
         if len(czsc_min.data) < 1:
             util_log_info("========={} {} 0 5min Quotes========".format(code, exchange))
@@ -1102,7 +1104,8 @@ def main_signal():
         #     'exchange': ['czce', 'dce', 'shfe', 'cffex'], 'instrument': ['future'], 'code': "^\w+L[89]$"
         # },
         # {'name': 'stock', 'exchange': ['sse', 'szse'], 'instrument': ['stock']},
-        {'name': 'hkconnect', 'exchange': ['hkconnect'], 'instrument': ['stock']},
+        {'name': 'stock', 'exchange': ['szse'], 'instrument': ['stock']},
+        # {'name': 'hkconnect', 'exchange': ['hkconnect'], 'instrument': ['stock']},
     ]
 
     def inst_filter(security):
@@ -1119,11 +1122,22 @@ def main_signal():
     security_df = SECURITY_DATAFRAME
     security_df['class'] = SECURITY_DATAFRAME.apply(inst_filter, axis=1)
 
-    last_trade_date = pd.to_datetime(util_get_real_date(datetime.today().strftime('%Y-%m-%d')))
+    # last_trade_date = pd.to_datetime(util_get_real_date(datetime.today().strftime('%Y-%m-%d')))
+    last_trade_date = pd.to_datetime('2021-02-09')
 
     for security_class in security_classes:
         class_name = security_class['name']
         df = calculate_bs_signals(security_df[security_df['class'] == class_name], last_trade_date)
+
+        if df.empty:
+            continue
+
+        if class_name == 'stock':
+            filename = 'scores.csv'
+            scores_df = pd.read_csv(filename)
+            scores_df['code'] = scores_df['code'].apply(lambda x: "{:0>6d}".format(x))
+            scores_df.set_index('code', inplace=True)
+            df = df.join(scores_df, on='code')
         df.to_csv('{}_signal_{}.csv'.format(class_name, last_trade_date.strftime('%Y%m%d')), index=False)
 
 

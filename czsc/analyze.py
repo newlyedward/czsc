@@ -6,6 +6,7 @@ from datetime import datetime
 
 from czsc.Data.FinancialStruct import FinancialStruct
 from czsc.Fetch.mongo import fetch_financial_report
+from czsc.SAVE import save_financial_files
 from czsc.factors import threshold_dict
 from czsc.Utils import util_log_info
 
@@ -80,5 +81,6 @@ def get_financial_scores():
 
 
 if __name__ == '__main__':
+    # save_financial_files()           # 更新数据库财务数据
     scores = get_financial_scores()
     scores.to_csv('scores.csv')
