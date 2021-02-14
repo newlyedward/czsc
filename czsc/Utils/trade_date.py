@@ -1,8 +1,8 @@
 # coding: utf-8
 import functools
-import time
+# import time
 import pandas as pd
-from datetime import datetime, time, timedelta
+from datetime import datetime, timedelta, time
 
 from czsc.Utils import util_log_info
 
@@ -7604,7 +7604,7 @@ def util_date_valid(date):
 
     """
     try:
-        time.strptime(date, "%Y-%m-%d")
+        datetime.strptime(date, "%Y-%m-%d")
         return True
     except:
         return False
@@ -7625,7 +7625,7 @@ def util_date_stamp(date):
         time
     """
     datestr = str(date)[0:10]
-    date = time.mktime(time.strptime(datestr, '%Y-%m-%d'))
+    date = pd.to_datetime(datestr)
     return date
 
 
@@ -7702,14 +7702,14 @@ def util_get_real_date(date, trade_list=None, towards=-1):
     if towards == 1:
         while date not in trade_list:
             date = str(
-                datetime.strptime(str(date)[0:10], '%Y-%m-%d') +  timedelta(days=1)
+                datetime.strptime(str(date)[0:10], '%Y-%m-%d') + timedelta(days=1)
             )[0:10]
         else:
             return str(date)[0:10]
     elif towards == -1:
         while date not in trade_list:
             date = str(
-                datetime.strptime(str(date)[0:10],'%Y-%m-%d') - timedelta(days=1)
+                datetime.strptime(str(date)[0:10], '%Y-%m-%d') - timedelta(days=1)
             )[0:10]
         else:
             return str(date)[0:10]
@@ -7790,7 +7790,7 @@ def util_get_real_datelist(start, end):
     if trade_date_sse.index(real_start) > trade_date_sse.index(real_end):
         return None, None
     else:
-        return (real_start, real_end)
+        return real_start, real_end
 
 
 def util_get_trade_gap(start, end):
@@ -7835,23 +7835,6 @@ class TradeDate:
             util_log_info('Wrong input data type!')
 
         self.threshold = time(20, 30)
-
-    # def __lt__(self, other):
-    #     if self.date.date() < other.date.date():
-    #         return True
-    #     elif self.date.date() == other.date.date():
-    #         if self.date.time() < self.threshold:
-    #             if other.time() < self.threshold:
-    #                 return self.date.time() < other.date.time()
-    #             else:
-    #                 return False
-    #         else:
-    #             if other.date.time() < self.threshold:
-    #                 return True
-    #             else:
-    #                 return self.date.time() < other.date.time()
-    #     else:
-    #         return False
 
     def __le__(self, other):
         if self.date.date() < other.date.date():

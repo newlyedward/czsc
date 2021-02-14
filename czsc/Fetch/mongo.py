@@ -242,7 +242,7 @@ def fetch_financial_report(code=None, start=None, end=None, report_date=None, lt
                 return
 
             if not util_date_valid(start):
-                util_log_info('Something wrong with end date {}'.format(start))
+                util_log_info('Something wrong with start date {}'.format(start))
                 return
 
             filter.update(
