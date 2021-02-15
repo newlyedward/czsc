@@ -375,19 +375,22 @@ def get_style_block():
     filename = '{}{}{}'.format(TDX_DIR, os.sep, 'T0002\\hq_cache\\block_fg.dat')
     return BlockReader().get_df(filename).pivot(index='code', columns='blockname', values='block_type')
 
-def get_covertible_info():
-    """
-    返回股票对应的指数
-    block_zs.dat   对应通达信指数板块
-    block_gn.dat   对应通达信概念板块
-    block_fg.dat   对应通达信风格板块  融资融券 已高送转 近期弱势
 
-    index 为 code
-    columns 为指数，如果为指数成份股 则为2
+def get_convertible_info():
+    """
+    D:\Trade\TDX\cjzq_tdx\T0002\hq_cache\speckzzdata.txt
     :return:
     """
-    filename = '{}{}{}'.format(TDX_DIR, os.sep, 'T0002\\hq_cache\\block_fg.dat')
-    return BlockReader().get_df(filename).pivot(index='code', columns='blockname', values='block_type')
+    filename = '{}{}{}'.format(TDX_DIR, os.sep, 'T0002\\hq_cache\\speckzzdata.txt')
+    columns = [
+        'exchange', 'code', 'stock_code', 'convert_price', 'current_interest', 'list_amount', 'call_price', 'redeem_price',
+        'convert_start', 'due_price', 'convert_end', 'convert_code', 'current_amount', 'list_date', 'convert_ratio(%)'
+    ]
+    df = pd.read_csv(filename, names=columns)
+    df['exchange'] = df['exchange'].apply(lambda x: 'sse' if x else 'szse')
+    df[['code', 'stock_code']] = df[['code', 'stock_code']].applymap(lambda x: '{:0>6d}'.format(x))
+    df[['list_amount', 'current_amount']] = df[['list_amount', 'current_amount']] * 10000
+    return df
 
 
 if __name__ == "__main__":
@@ -396,9 +399,11 @@ if __name__ == "__main__":
     # security_df = get_security_list()
     # hq = fetch_future_day('rbl8')
     # hq = get_bar('rbl8', freq='week')
-    df = get_index_block()
-    df.to_csv('index_block.csv', encoding='gb2312')
-    df = get_concept_block()
-    df.to_csv('concept_block.csv', encoding='gb2312')
-    df = get_style_block()
-    df.to_csv('style_block.csv', encoding='gb2312')
+    # df = get_index_block()
+    # df.to_csv('index_block.csv', encoding='gb2312')
+    # df = get_concept_block()
+    # df.to_csv('concept_block.csv', encoding='gb2312')
+    # df = get_style_block()
+    # df.to_csv('style_block.csv', encoding='gb2312')
+    df = get_convertible_info()
+    df.to_csv('convertible.csv', index=False)
