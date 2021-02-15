@@ -30,7 +30,7 @@ from datetime import datetime
 import pandas as pd
 from pandas import DataFrame
 
-from pytdx.reader import TdxDailyBarReader, TdxExHqDailyBarReader, TdxMinBarReader, TdxLCMinBarReader
+from pytdx.reader import TdxDailyBarReader, TdxExHqDailyBarReader, TdxLCMinBarReader, BlockReader
 
 from czsc.Setting import TDX_DIR
 from czsc.Utils import util_log_info
@@ -331,9 +331,74 @@ def get_bar(code, start=None, end=None, freq='day', exchange=None):
     return df
 
 
+def get_index_block():
+    """
+    返回股票对应的指数
+    block_zs.dat   对应通达信指数板块
+    block_gn.dat   对应通达信概念板块
+    block_fg.dat   对应通达信风格板块  融资融券 已高送转 近期弱势
+
+    index 为 code
+    columns 为指数，如果为指数成份股 则为2
+    :return:
+    """
+    filename = '{}{}{}'.format(TDX_DIR, os.sep, 'T0002\\hq_cache\\block_zs.dat')
+    return BlockReader().get_df(filename).pivot(index='code', columns='blockname', values='block_type')
+
+
+def get_concept_block():
+    """
+    返回股票对应的指数
+    block_zs.dat   对应通达信指数板块
+    block_gn.dat   对应通达信概念板块
+    block_fg.dat   对应通达信风格板块  融资融券 已高送转 近期弱势
+
+    index 为 code
+    columns 为指数，如果为指数成份股 则为2
+    :return:
+    """
+    filename = '{}{}{}'.format(TDX_DIR, os.sep, 'T0002\\hq_cache\\block_gn.dat')
+    return BlockReader().get_df(filename).pivot(index='code', columns='blockname', values='block_type')
+
+
+def get_style_block():
+    """
+    返回股票对应的指数
+    block_zs.dat   对应通达信指数板块
+    block_gn.dat   对应通达信概念板块
+    block_fg.dat   对应通达信风格板块  融资融券 已高送转 近期弱势
+
+    index 为 code
+    columns 为指数，如果为指数成份股 则为2
+    :return:
+    """
+    filename = '{}{}{}'.format(TDX_DIR, os.sep, 'T0002\\hq_cache\\block_fg.dat')
+    return BlockReader().get_df(filename).pivot(index='code', columns='blockname', values='block_type')
+
+def get_covertible_info():
+    """
+    返回股票对应的指数
+    block_zs.dat   对应通达信指数板块
+    block_gn.dat   对应通达信概念板块
+    block_fg.dat   对应通达信风格板块  融资融券 已高送转 近期弱势
+
+    index 为 code
+    columns 为指数，如果为指数成份股 则为2
+    :return:
+    """
+    filename = '{}{}{}'.format(TDX_DIR, os.sep, 'T0002\\hq_cache\\block_fg.dat')
+    return BlockReader().get_df(filename).pivot(index='code', columns='blockname', values='block_type')
+
+
 if __name__ == "__main__":
     # ds_df = _get_ds_list()
     # sz_sh_df = _get_sh_sz_list()
     # security_df = get_security_list()
     # hq = fetch_future_day('rbl8')
-    hq = get_bar('rbl8', freq='week')
+    # hq = get_bar('rbl8', freq='week')
+    df = get_index_block()
+    df.to_csv('index_block.csv', encoding='gb2312')
+    df = get_concept_block()
+    df.to_csv('concept_block.csv', encoding='gb2312')
+    df = get_style_block()
+    df.to_csv('style_block.csv', encoding='gb2312')
