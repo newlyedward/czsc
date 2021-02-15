@@ -32,6 +32,7 @@ from pandas import DataFrame
 
 from pytdx.reader import TdxDailyBarReader, TdxExHqDailyBarReader, TdxLCMinBarReader, BlockReader
 
+from czsc.Data.code_classify import sse_code_classify, szse_code_classify
 from czsc.Setting import TDX_DIR
 from czsc.Utils import util_log_info
 from czsc.Data.frequency import parse_frequency_str
@@ -53,7 +54,9 @@ def _get_sh_sz_list():
                      "50", "51"       基金
                      "01", "10", "11", "12", "13", "14" 债券，和深圳有重合
                      110 可转债 对应股票代码 600
-                     113 可转债 对应股票代码 603
+                     111                  601
+                     113 可转债 对应股票代码 603 沪市中小板
+                     118 可转债                科创板
 
     'szse'    # 深圳证券交易所       sz  6位数字代码
             前两位 "00", "30"  A股
@@ -80,31 +83,7 @@ def _get_sh_sz_list():
 
     sh_df['exchange'] = 'sse'
 
-    SH_CODE_HEAD_TO_TYPE = {
-        '60': 'stock',
-        '68': 'stock',  # 科创板
-        '90': 'B stock',  # B股
-        '00': 'index',
-        '88': 'index',
-        '99': 'index',
-        '50': 'fund',
-        '51': 'fund',
-        '58': 'ETF',  # 科创板ETF
-        '20': 'bond',  # 国债逆回购
-        '01': 'bond',  # 贴债
-        '02': 'bond',
-        '10': 'bond',
-        '11': 'bond',
-        '12': 'bond',
-        '13': 'bond',
-        '14': 'bond',
-        '15': 'bond',
-        '16': 'bond',
-        '17': 'bond',
-        '75': 'bond',
-    }
-
-    sh_df['instrument'] = sh_df.code.apply(lambda x: SH_CODE_HEAD_TO_TYPE[x[:2]])
+    sh_df['instrument'] = sh_df.code.apply(sse_code_classify)
 
     sz_dir = '{}{}{}'.format(_SZ_DIR, os.sep, 'lday')
     sz_list = os.listdir(sz_dir)
@@ -119,23 +98,7 @@ def _get_sh_sz_list():
 
     sz_df['exchange'] = 'szse'
 
-    SZ_CODE_HEAD_TO_TYPE = {
-        '00': 'stock',  # 中小板 主板
-        '30': 'stock',  # 创业板
-        '20': 'B stock',  # B股
-        '39': 'index',
-        '15': 'fund',
-        '16': 'fund',
-        '10': 'bond',
-        '11': 'bond',
-        '12': 'bond',
-        '13': 'bond',  # 逆回购
-        '14': 'bond',  # 贴息国债，就一个品种
-        '38': 'bond',  # 贴息国债，就一个品种
-        '18': 'reits',  # REITS
-        '08': 'unknown',
-    }
-    sz_df['instrument'] = sz_df.code.apply(lambda x: SZ_CODE_HEAD_TO_TYPE[x[:2]])
+    sz_df['instrument'] = sz_df.code.apply(szse_code_classify)
 
     return pd.concat([sh_df, sz_df])
 
@@ -396,7 +359,8 @@ def get_convertible_info():
 if __name__ == "__main__":
     # ds_df = _get_ds_list()
     # sz_sh_df = _get_sh_sz_list()
-    # security_df = get_security_list()
+    security_df = get_security_list()
+    security_df.to_csv('security.csv')
     # hq = fetch_future_day('rbl8')
     # hq = get_bar('rbl8', freq='week')
     # df = get_index_block()
@@ -405,5 +369,5 @@ if __name__ == "__main__":
     # df.to_csv('concept_block.csv', encoding='gb2312')
     # df = get_style_block()
     # df.to_csv('style_block.csv', encoding='gb2312')
-    df = get_convertible_info()
-    df.to_csv('convertible.csv', index=False)
+    # df = get_convertible_info()
+    # df.to_csv('convertible.csv', index=False)
