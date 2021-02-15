@@ -806,7 +806,7 @@ class CzscMongo(CzscBase):
         )
 
         if not chart_path:
-            chart_path = '{}_{}.html'.format(self.code, self.freq)
+            chart_path = 'E:\\signal\\{}_{}.html'.format(self.code, self.freq)
         chart.render(chart_path)
         webbrowser.open(chart_path)
 
@@ -1143,7 +1143,7 @@ def main_signal():
 
 
 def main_single():
-    code = '300999'
+    code = 'spl8'
     exchange = 'szse'
     end = '2021-08-27'
     czsc_day = CzscMongo(code=code, end=end, freq='day', exchange=exchange)
@@ -1169,5 +1169,5 @@ def main_single():
 
 if __name__ == '__main__':
     # main_consumer()
-    main_signal()
-    # main_single()
+    # main_signal()
+    main_single()
