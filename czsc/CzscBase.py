@@ -450,24 +450,27 @@ class XdList(object):
 
         zs = self.zs_list[-1]
         xd = self.xd_list[-1]
-        # last_xd = self.xd_list[-2]
-        #
-        # boll = self.indicators.boll[-1]
 
-        compare_xd = zs['xd_list'][0]
+        xd_list = zs['xd_list'][-2::-2]
+        xd_list.reverse()
+
+        compare_dif = None
 
         # 没有进入段，或者与进入段反向
-        if compare_xd['fx_mark'] * xd['fx_mark'] < 0 or 'zs_start' not in zs:
+        if xd_list[0]['fx_mark'] * xd['fx_mark'] < 0 or 'zs_start' not in zs:
             if xd['fx_mark'] < 0:
-                peak_xd = zs['GG'][-1]
+                peak_date = zs['GG'][-1]['date']
             else:
-                peak_xd = zs['DD'][-1]
+                peak_date = zs['DD'][-1]['date']
 
-            for _xd in zs['xd_list']:
-                if _xd['date'] > peak_xd['date'] and _xd['fx_mark'] * xd['fx_mark'] > 0:
+            for _xd in xd_list:
+                if _xd['date'] > peak_date:
+                    compare_dif = _xd.get('dif')
                     break
+        else:
+            compare_dif = xd_list[0].get('dif')
 
-
+        dif = xd.get('dif')
 
         sig = {
             'date': self.bars[-1]['date'],
@@ -542,6 +545,13 @@ class XdList(object):
 
         # sig.update(xd_mark=xd_mark, support=support * 100, resistance=resistance * 100)
         sig.update(xd_mark=xd_mark)
+
+        if compare_dif and dif:
+            direction = np.sign(xd['fx_mark'])
+            if dif * direction > compare_dif * direction:
+                sig.update(dif=-1)
+            else:
+                sig.update(dif=1)
 
         self.sig_list.append(sig)
 
@@ -772,8 +782,8 @@ class CzscBase:
                         last_sig['real_loc'] = last_sig['real_loc'] + signal['real_loc']
                         last_sig['location'] = last_sig['location'] + signal['location']
                         last_sig['weight'] = last_sig['weight'] + signal['weight']
-                    else:
-                        util_log_info('High level xd {} == low level xd {}'.format(index, index - 1))
+                    # else:
+                    #     util_log_info('High level xd {} == low level xd {}'.format(index, index - 1))
 
             temp_list = xd_list
             xd_list = xd_list.next
@@ -1147,7 +1157,7 @@ def main_signal():
 
 
 def main_single():
-    code = '123063'
+    code = 'ihl8'
     exchange = 'szse'
     end = '2021-08-27'
     czsc_day = CzscMongo(code=code, end=end, freq='day', exchange=exchange)
