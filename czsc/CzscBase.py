@@ -303,9 +303,10 @@ class XdList(object):
         end = trade_date.index(xd['date'])
         kn = end - start + 1
         fx_mark = kn * np.sign(xd.get('fx_mark', xd.get('direction', 0)))
+        dif = self.indicators.macd[end]['dif']
         # macd = sum([x['macd'] for x in self.indicators.macd[start: end+1] if fx_mark * x['macd'] > 0])
         # xd.update(fx_mark=fx_mark, macd=macd, avg_macd=macd/kn)
-        xd.update(fx_mark=fx_mark)
+        xd.update(fx_mark=fx_mark, dif=dif)
 
     def update_xd(self):
         """更新笔分型序列
@@ -453,6 +454,21 @@ class XdList(object):
         #
         # boll = self.indicators.boll[-1]
 
+        compare_xd = zs['xd_list'][0]
+
+        # 没有进入段，或者与进入段反向
+        if compare_xd['fx_mark'] * xd['fx_mark'] < 0 or 'zs_start' not in zs:
+            if xd['fx_mark'] < 0:
+                peak_xd = zs['GG'][-1]
+            else:
+                peak_xd = zs['DD'][-1]
+
+            for _xd in zs['xd_list']:
+                if _xd['date'] > peak_xd['date'] and _xd['fx_mark'] * xd['fx_mark'] > 0:
+                    break
+
+
+
         sig = {
             'date': self.bars[-1]['date'],
             'real_loc': zs['real_loc'],
@@ -526,6 +542,7 @@ class XdList(object):
 
         # sig.update(xd_mark=xd_mark, support=support * 100, resistance=resistance * 100)
         sig.update(xd_mark=xd_mark)
+
         self.sig_list.append(sig)
 
     def update(self):
@@ -723,7 +740,7 @@ class CzscBase:
 
     def update(self):
         # 有包含关系时，不可能有分型出现，不出现分型时才需要
-        # self.indicators.update()
+        self.indicators.update()
 
         try:
             update_fx(bars=self.bars, new_bars=self.new_bars, fx_list=self.fx_list, trade_date=self.trade_date)
@@ -743,21 +760,20 @@ class CzscBase:
             result = xd_list.update()
 
             # 计算对应买卖点
-            # xd_list.update_sig(bars=self.bars, indicators=self.indicators)
-            #
-            # result = xd_list.update_xd(trade_date=self.trade_date)
-            # if result:
             if len(xd_list.sig_list) > 0:
                 signal = xd_list.sig_list[-1]
                 if index == 0:
                     signal.update(xd=0)
                     self.sig_list.append(signal)
                 else:
-                    last_sig = self.sig_list[-1]
-                    last_sig.update(xd=index, xd_mark=signal['xd_mark'])
-                    last_sig['real_loc'] = last_sig['real_loc'] + signal['real_loc']
-                    last_sig['location'] = last_sig['location'] + signal['location']
-                    last_sig['weight'] = last_sig['weight'] + signal['weight']
+                    if xd_list.xd_list[-2]['date'] != temp_list.xd_list[-2]['date']:
+                        last_sig = self.sig_list[-1]
+                        last_sig.update(xd=index, xd_mark=signal['xd_mark'])
+                        last_sig['real_loc'] = last_sig['real_loc'] + signal['real_loc']
+                        last_sig['location'] = last_sig['location'] + signal['location']
+                        last_sig['weight'] = last_sig['weight'] + signal['weight']
+                    else:
+                        util_log_info('High level xd {} == low level xd {}'.format(index, index - 1))
 
             temp_list = xd_list
             xd_list = xd_list.next
@@ -901,19 +917,7 @@ class CzscMongo(CzscBase):
             print(error)
 
     def to_csv(self):
-        # xd = self.xd_list
-        # index = 0
-        # sig = []
-        # while xd:
-        #     df = pd.DataFrame(xd.sig_list)
-        #     df['xd'] = index
-        #     sig.append(df)
-        #     xd = xd.next
-        #     index = index + 1
-        #
-        # sig_df = pd.concat(sig).set_index(['date', 'xd']).sort_index()
-        # filename = '{}_{}.csv'.format(self.code, self.freq)
-        # sig_df.to_csv(filename)
+
         if len(self.sig_list) < 1:
             return
 
@@ -1105,7 +1109,7 @@ def main_signal():
         # },
         # {'name': 'stock', 'exchange': ['sse', 'szse'], 'instrument': ['stock']},
         {'name': 'convertible', 'exchange': ['sse', 'szse'], 'instrument': ['convertible']},
-        {'name': 'ETF', 'exchange': ['sse', 'szse'], 'instrument': ['ETF']},
+        # {'name': 'ETF', 'exchange': ['sse', 'szse'], 'instrument': ['ETF']},
         # {'name': 'hkconnect', 'exchange': ['hkconnect'], 'instrument': ['stock']},
     ]
 
@@ -1123,8 +1127,8 @@ def main_signal():
     security_df = SECURITY_DATAFRAME
     security_df['class'] = SECURITY_DATAFRAME.apply(inst_filter, axis=1)
 
-    last_trade_date = pd.to_datetime(util_get_real_date(datetime.today().strftime('%Y-%m-%d')))
-    # last_trade_date = pd.to_datetime('2021-02-09')
+    # last_trade_date = pd.to_datetime(util_get_real_date(datetime.today().strftime('%Y-%m-%d')))
+    last_trade_date = pd.to_datetime('2021-02-09')
 
     for security_class in security_classes:
         class_name = security_class['name']
@@ -1143,7 +1147,7 @@ def main_signal():
 
 
 def main_single():
-    code = 'spl8'
+    code = '123063'
     exchange = 'szse'
     end = '2021-08-27'
     czsc_day = CzscMongo(code=code, end=end, freq='day', exchange=exchange)
