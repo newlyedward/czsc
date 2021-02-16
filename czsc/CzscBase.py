@@ -304,9 +304,9 @@ class XdList(object):
         kn = end - start + 1
         fx_mark = kn * np.sign(xd.get('fx_mark', xd.get('direction', 0)))
         dif = self.indicators.macd[end]['dif']
-        # macd = sum([x['macd'] for x in self.indicators.macd[start: end+1] if fx_mark * x['macd'] > 0])
-        # xd.update(fx_mark=fx_mark, macd=macd, avg_macd=macd/kn)
-        xd.update(fx_mark=fx_mark, dif=dif)
+        macd = sum([x['macd'] for x in self.indicators.macd[start: end+1] if fx_mark * x['macd'] > 0])
+        xd.update(fx_mark=fx_mark, dif=dif, macd=macd)
+        # xd.update(fx_mark=fx_mark, dif=dif, avg_macd=macd/kn)
 
     def update_xd(self):
         """更新笔分型序列
@@ -455,6 +455,7 @@ class XdList(object):
         xd_list.reverse()
 
         compare_dif = None
+        compare_macd = None
 
         # 没有进入段，或者与进入段反向
         if xd_list[0]['fx_mark'] * xd['fx_mark'] < 0 or 'zs_start' not in zs:
@@ -466,11 +467,15 @@ class XdList(object):
             for _xd in xd_list:
                 if _xd['date'] > peak_date:
                     compare_dif = _xd.get('dif')
+                    compare_macd = _xd.get('macd')
+
                     break
         else:
             compare_dif = xd_list[0].get('dif')
+            compare_macd = xd_list[0].get('macd')
 
         dif = xd.get('dif')
+        macd = xd.get('macd')
 
         sig = {
             'date': self.bars[-1]['date'],
@@ -490,7 +495,7 @@ class XdList(object):
             # if zs['location'] > 0 and zs.get('zs_start', False):
             #     sig.update(start_macd=zs['zs_start']['macd'], start_avg_macd=zs['zs_start']['avg_macd'])
 
-            # sig.update(boll=boll.get('UB', np.nan) / self.bars[-1]['high'] * 100 - 100)
+            sig.update(boll=self.indicators.boll[-1].get('UB', np.nan) / self.bars[-1]['high'] * 100 - 100)
 
             if xd['value'] > zs['GG'][-1]['value']:
                 xd_mark = -1  # 如果weight=1, 背驰，有可能1卖
@@ -518,7 +523,7 @@ class XdList(object):
             # if zs['location'] < 0 and zs.get('zs_start', False):
             #     sig.update(start_macd=zs['zs_start']['macd'], start_avg_macd=zs['zs_start']['avg_macd'])
 
-            # sig.update(boll=100 - boll.get('LB', np.nan) / self.bars[-1]['low'] * 100)
+            sig.update(boll=100 - self.indicators.boll[-1].get('LB', np.nan) / self.bars[-1]['low'] * 100)
 
             if xd['value'] > zs['GG'][-1]['value']:
                 xd_mark = 4  # 三买
@@ -546,12 +551,19 @@ class XdList(object):
         # sig.update(xd_mark=xd_mark, support=support * 100, resistance=resistance * 100)
         sig.update(xd_mark=xd_mark)
 
+        direction = np.sign(xd['fx_mark'])
+
         if compare_dif and dif:
-            direction = np.sign(xd['fx_mark'])
             if dif * direction > compare_dif * direction:
                 sig.update(dif=-1)
             else:
                 sig.update(dif=1)
+
+        if compare_macd and macd:
+            if macd * direction > compare_macd * direction:
+                sig.update(macd=-1)
+            else:
+                sig.update(macd=1)
 
         self.sig_list.append(sig)
 
@@ -827,8 +839,8 @@ class CzscMongo(CzscBase):
         chart = kline_pro(
             kline=self.bars, fx=self.fx_list,
             bs=[], xd=self.xd_list,
-            # title=self.code+'_'+self.freq, width='1520px', height='580px'
-            title=self.code + '_' + self.freq, width='2540px', height='850px'
+            title=self.code+'_'+self.freq, width='1520px', height='580px'
+            # title=self.code + '_' + self.freq, width='2540px', height='850px'
         )
 
         if not chart_path:
@@ -1157,7 +1169,7 @@ def main_signal():
 
 
 def main_single():
-    code = 'ihl8'
+    code = 'spl8'
     exchange = 'szse'
     end = '2021-08-27'
     czsc_day = CzscMongo(code=code, end=end, freq='day', exchange=exchange)
