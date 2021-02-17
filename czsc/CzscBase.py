@@ -211,7 +211,7 @@ class XdList(object):
                 'DD': [zd],  # 根据最高最低点的变化过程可以识别时扩散，收敛，向上还是向下的形态
                 'xd_list': xd_list[:2],
                 'weight': 1,  # 记录中枢中段的数量
-                'location': 0,  # 初始状态为0，说明没有方向， -1 表明下降第1割中枢， +2 表明上升第2个中枢
+                'location': 0,  # 初始状态为0，说明没有方向， -1 表明下降第1个中枢， +2 表明上升第2个中枢
                 'real_loc': 0  # 除去只有一段的中枢
             }
             zs_list.append(zs)
@@ -788,7 +788,8 @@ class CzscBase:
                     signal.update(xd=0)
                     self.sig_list.append(signal)
                 else:
-                    if xd_list.xd_list[-2]['date'] != temp_list.xd_list[-2]['date']:
+                    if xd_list.xd_list[-2]['date'] != temp_list.xd_list[-2]['date'] \
+                            and xd_list.zs_list[-1]['location'] != 0:
                         last_sig = self.sig_list[-1]
                         last_sig.update(xd=index, xd_mark=signal['xd_mark'])
                         last_sig['real_loc'] = last_sig['real_loc'] + signal['real_loc']
@@ -1169,8 +1170,8 @@ def main_signal(last_trade_date=None, security_blocks=None):
 
 
 def main_single():
-    code = '600466'
-    exchange = 'sse'
+    code = 'ful8'
+    exchange = 'szse'
     end = '2021-08-27'
     czsc_day = CzscMongo(code=code, end=end, freq='day', exchange=exchange)
     czsc_day.run()
@@ -1195,6 +1196,7 @@ def main_single():
 
 if __name__ == '__main__':
     # main_consumer()
-    # last_trade_date = pd.to_datetime('2021-02-10')
-    # main_signal(security_blocks=['stock'])
+    # last_trade_date = pd.to_datetime('2021-02-17')
+    # last_trade_date = None
+    # main_signal(security_blocks=['future'], last_trade_date=last_trade_date)
     main_single()
