@@ -794,6 +794,7 @@ class CzscBase:
                         last_sig['real_loc'] = last_sig['real_loc'] + signal['real_loc']
                         last_sig['location'] = last_sig['location'] + signal['location']
                         last_sig['weight'] = last_sig['weight'] + signal['weight']
+                        
                     # else:
                     #     util_log_info('High level xd {} == low level xd {}'.format(index, index - 1))
 
@@ -839,8 +840,8 @@ class CzscMongo(CzscBase):
         chart = kline_pro(
             kline=self.bars, fx=self.fx_list,
             bs=[], xd=self.xd_list,
-            title=self.code+'_'+self.freq, width='1520px', height='580px'
-            # title=self.code + '_' + self.freq, width='2540px', height='850px'
+            # title=self.code+'_'+self.freq, width='1520px', height='580px'
+            title=self.code + '_' + self.freq, width='2540px', height='850px'
         )
 
         if not chart_path:
@@ -1076,19 +1077,19 @@ def calculate_bs_signals(security_df: pd.DataFrame, last_trade_date=None):
             continue
 
         df = pd.DataFrame(sig_min_list).set_index('date')
-        df = df[df.index > last_trade_date]  # 5分钟数据有可能缺失，造成实际没数据
+        df = df[df.index > last_trade_date]         # 5分钟数据有可能缺失，造成实际没数据
+        df = df[df['xd_mark'] * xd1_mark > 0]       # 只保留和day同向的买卖点
 
         if df.empty:
             util_log_info("===Please Download {} {} 5min Data===".format(code, exchange))
             continue
 
-        df = df.sort_values(by=['xd', 'real_loc', 'weight'], ascending=[False, xd1_mark > 0, True])
+        df = df.sort_values(by=['xd', 'xd_mark', 'real_loc'], ascending=[False, xd1_mark > 0, xd1_mark > 0])
 
-        last_day_sig.update(
-            xd_min=df.iloc[0]['xd'], real_loc_min=df.iloc[0]['real_loc'],
-            weight_min=df.iloc[0]['weight'], location_min=df.iloc[0]['location'],
-            xd_mark_min=df.iloc[0]['xd_mark'],
-        )
+        last_min_sig = df.iloc[0].to_dict()
+
+        for key in last_min_sig:
+            last_day_sig[key+'_min'] = last_min_sig[key]
 
         if item['instrument'] == 'future':
             amount = czsc_day.bars[-1]['volume']
@@ -1111,8 +1112,8 @@ def calculate_bs_signals(security_df: pd.DataFrame, last_trade_date=None):
     df = pd.DataFrame(sig_list)
     order = [
         'code',
-        'xd', 'real_loc', 'xd_mark', 'weight', 'location',
-        'xd_min', 'real_loc_min', 'xd_mark_min', 'weight_min', 'location_min',
+        'xd', 'real_loc', 'xd_mark', 'weight', 'location', 'boll', 'dif', 'macd',
+        'xd_min', 'real_loc_min', 'xd_mark_min', 'weight_min', 'location_min', 'boll_min', 'dif_min', 'macd_min',
         'amount',
     ]
     df = df[order].sort_values(by=['xd', 'real_loc'], ascending=[False, True])
@@ -1121,18 +1122,18 @@ def calculate_bs_signals(security_df: pd.DataFrame, last_trade_date=None):
     return df
 
 
-def main_signal():
+def main_signal(last_trade_date=None, security_blocks=None):
     from czsc.Fetch.tdx import SECURITY_DATAFRAME
 
     security_classes = [
-        # {
-        #     'name': 'future',
-        #     'exchange': ['czce', 'dce', 'shfe', 'cffex'], 'instrument': ['future'], 'code': "^\w+L[89]$"
-        # },
-        # {'name': 'stock', 'exchange': ['sse', 'szse'], 'instrument': ['stock']},
+        {
+            'name': 'future',
+            'exchange': ['czce', 'dce', 'shfe', 'cffex'], 'instrument': ['future'], 'code': "^\w+L[89]$"
+        },
+        {'name': 'stock', 'exchange': ['sse', 'szse'], 'instrument': ['stock']},
         {'name': 'convertible', 'exchange': ['sse', 'szse'], 'instrument': ['convertible']},
-        # {'name': 'ETF', 'exchange': ['sse', 'szse'], 'instrument': ['ETF']},
-        # {'name': 'hkconnect', 'exchange': ['hkconnect'], 'instrument': ['stock']},
+        {'name': 'ETF', 'exchange': ['sse', 'szse'], 'instrument': ['ETF']},
+        {'name': 'hkconnect', 'exchange': ['hkconnect'], 'instrument': ['stock']},
     ]
 
     def inst_filter(security):
@@ -1149,11 +1150,10 @@ def main_signal():
     security_df = SECURITY_DATAFRAME
     security_df['class'] = SECURITY_DATAFRAME.apply(inst_filter, axis=1)
 
-    # last_trade_date = pd.to_datetime(util_get_real_date(datetime.today().strftime('%Y-%m-%d')))
-    last_trade_date = pd.to_datetime('2021-02-09')
+    if last_trade_date is None:
+        last_trade_date = pd.to_datetime(util_get_real_date(datetime.today().strftime('%Y-%m-%d')))
 
-    for security_class in security_classes:
-        class_name = security_class['name']
+    for class_name in security_blocks:
         df = calculate_bs_signals(security_df[security_df['class'] == class_name], last_trade_date)
 
         if df is None or df.empty:
@@ -1169,8 +1169,8 @@ def main_signal():
 
 
 def main_single():
-    code = 'spl8'
-    exchange = 'szse'
+    code = '600466'
+    exchange = 'sse'
     end = '2021-08-27'
     czsc_day = CzscMongo(code=code, end=end, freq='day', exchange=exchange)
     czsc_day.run()
@@ -1195,5 +1195,6 @@ def main_single():
 
 if __name__ == '__main__':
     # main_consumer()
-    # main_signal()
+    # last_trade_date = pd.to_datetime('2021-02-10')
+    # main_signal(security_blocks=['stock'])
     main_single()
