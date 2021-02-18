@@ -451,8 +451,6 @@ class XdList(object):
         zs = self.zs_list[-1]
         xd = self.xd_list[-1]
 
-
-
         sig = {
             'date': self.bars[-1]['date'],
             'real_loc': zs['real_loc'],
@@ -797,9 +795,9 @@ class CzscBase:
                     if xd_list.zs_list[-1]['location'] != 0:
                         last_sig = self.sig_list[-1]
                         last_sig.update(xd=index, xd_mark=signal['xd_mark'])
-                        last_sig['real_loc'] = last_sig['real_loc'] + signal['real_loc']
-                        last_sig['location'] = last_sig['location'] + signal['location']
-                        last_sig['weight'] = last_sig['weight'] + signal['weight']
+                        last_sig['real_loc'] = signal['real_loc']
+                        last_sig['location'] = signal['location']
+                        last_sig['weight'] = signal['weight']
                         if signal['xd_mark'] in [1, -1]:
                             last_sig['dif'] = signal.get('dif')
                             last_sig['macd'] = signal.get('macd')
@@ -1178,7 +1176,7 @@ def main_signal(last_trade_date=None, security_blocks=None):
 
 
 def main_single():
-    code = 'scl8'
+    code = 'icl9'
     exchange = 'szse'
     end = '2021-08-27'
     czsc_day = CzscMongo(code=code, end=end, freq='day', exchange=exchange)
