@@ -788,8 +788,7 @@ class CzscBase:
                     signal.update(xd=0)
                     self.sig_list.append(signal)
                 else:
-                    if xd_list.xd_list[-2]['date'] != temp_list.xd_list[-2]['date'] \
-                            and xd_list.zs_list[-1]['location'] != 0:
+                    if xd_list.zs_list[-1]['location'] != 0:
                         last_sig = self.sig_list[-1]
                         last_sig.update(xd=index, xd_mark=signal['xd_mark'])
                         last_sig['real_loc'] = last_sig['real_loc'] + signal['real_loc']
@@ -1170,7 +1169,7 @@ def main_signal(last_trade_date=None, security_blocks=None):
 
 
 def main_single():
-    code = 'ful8'
+    code = 'ebl8'
     exchange = 'szse'
     end = '2021-08-27'
     czsc_day = CzscMongo(code=code, end=end, freq='day', exchange=exchange)
@@ -1197,6 +1196,6 @@ def main_single():
 if __name__ == '__main__':
     # main_consumer()
     # last_trade_date = pd.to_datetime('2021-02-17')
-    # last_trade_date = None
-    # main_signal(security_blocks=['future'], last_trade_date=last_trade_date)
+    last_trade_date = None
+    # main_signal(security_blocks=['future','stock', 'convertible', 'ETF', 'hkconnect'], last_trade_date=last_trade_date)
     main_single()
