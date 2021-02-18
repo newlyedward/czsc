@@ -451,31 +451,7 @@ class XdList(object):
         zs = self.zs_list[-1]
         xd = self.xd_list[-1]
 
-        xd_list = zs['xd_list'][-2::-2]
-        xd_list.reverse()
 
-        compare_dif = None
-        compare_macd = None
-
-        # 没有进入段，或者与进入段反向
-        if xd_list[0]['fx_mark'] * xd['fx_mark'] < 0 or 'zs_start' not in zs:
-            if xd['fx_mark'] < 0:
-                peak_date = zs['GG'][-1]['date']
-            else:
-                peak_date = zs['DD'][-1]['date']
-
-            for _xd in xd_list:
-                if _xd['date'] > peak_date:
-                    compare_dif = _xd.get('dif')
-                    compare_macd = _xd.get('macd')
-
-                    break
-        else:
-            compare_dif = xd_list[0].get('dif')
-            compare_macd = xd_list[0].get('macd')
-
-        dif = xd.get('dif')
-        macd = xd.get('macd')
 
         sig = {
             'date': self.bars[-1]['date'],
@@ -550,6 +526,36 @@ class XdList(object):
 
         # sig.update(xd_mark=xd_mark, support=support * 100, resistance=resistance * 100)
         sig.update(xd_mark=xd_mark)
+
+        if xd_mark not in [1, -1]:  # 只有1买-1卖需要计算macd背离的情况
+            self.sig_list.append(sig)
+            return
+
+        xd_list = zs['xd_list'][-2::-2]
+        xd_list.reverse()
+
+        compare_dif = None
+        compare_macd = None
+
+        # 没有进入段，或者与进入段反向
+        if xd_list[0]['fx_mark'] * xd['fx_mark'] < 0 or 'zs_start' not in zs:
+            if xd['fx_mark'] < 0:
+                peak_date = zs['GG'][-1]['date']
+            else:
+                peak_date = zs['DD'][-1]['date']
+
+            for _xd in xd_list:
+                if _xd['date'] > peak_date:
+                    compare_dif = _xd.get('dif')
+                    compare_macd = _xd.get('macd')
+
+                    break
+        else:
+            compare_dif = xd_list[0].get('dif')
+            compare_macd = xd_list[0].get('macd')
+
+        dif = xd.get('dif')
+        macd = xd.get('macd')
 
         direction = np.sign(xd['fx_mark'])
 
@@ -794,6 +800,9 @@ class CzscBase:
                         last_sig['real_loc'] = last_sig['real_loc'] + signal['real_loc']
                         last_sig['location'] = last_sig['location'] + signal['location']
                         last_sig['weight'] = last_sig['weight'] + signal['weight']
+                        if signal['xd_mark'] in [1, -1]:
+                            last_sig['dif'] = signal.get('dif')
+                            last_sig['macd'] = signal.get('macd')
                         
                     # else:
                     #     util_log_info('High level xd {} == low level xd {}'.format(index, index - 1))
@@ -1084,7 +1093,7 @@ def calculate_bs_signals(security_df: pd.DataFrame, last_trade_date=None):
             util_log_info("===Please Download {} {} 5min Data===".format(code, exchange))
             continue
 
-        df = df.sort_values(by=['xd', 'xd_mark', 'real_loc'], ascending=[False, xd1_mark > 0, xd1_mark > 0])
+        df = df.sort_values(by=['xd', 'xd_mark', 'location'], ascending=[False, xd1_mark > 0, xd1_mark > 0])
 
         last_min_sig = df.iloc[0].to_dict()
 
@@ -1169,7 +1178,7 @@ def main_signal(last_trade_date=None, security_blocks=None):
 
 
 def main_single():
-    code = 'ebl8'
+    code = 'scl8'
     exchange = 'szse'
     end = '2021-08-27'
     czsc_day = CzscMongo(code=code, end=end, freq='day', exchange=exchange)
@@ -1195,7 +1204,11 @@ def main_single():
 
 if __name__ == '__main__':
     # main_consumer()
-    # last_trade_date = pd.to_datetime('2021-02-17')
-    last_trade_date = None
-    # main_signal(security_blocks=['future','stock', 'convertible', 'ETF', 'hkconnect'], last_trade_date=last_trade_date)
+    # last_trade_date = pd.to_datetime('2021-02-10')
+    # last_trade_date = None
+    # main_signal(
+    #     # security_blocks=['future', 'stock', 'convertible', 'ETF', 'hkconnect'],
+    #     security_blocks=['future'],
+    #     last_trade_date=last_trade_date
+    # )
     main_single()
