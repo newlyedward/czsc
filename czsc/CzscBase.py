@@ -1163,11 +1163,12 @@ def main_signal(last_trade_date=None, security_blocks=None):
 
         return np.nan
 
-    security_df = SECURITY_DATAFRAME
-    security_df['class'] = SECURITY_DATAFRAME.apply(inst_filter, axis=1)
-
     if last_trade_date is None:
         last_trade_date = pd.to_datetime(util_get_real_date(datetime.today().strftime('%Y-%m-%d')))
+
+    security_df = SECURITY_DATAFRAME
+    security_df['class'] = security_df.apply(inst_filter, axis=1)
+    security_df = security_df[security_df['last_modified'].apply(lambda x: x >= last_trade_date)]
 
     for class_name in security_blocks:
         df = calculate_bs_signals(security_df[security_df['class'] == class_name], last_trade_date)

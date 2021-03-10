@@ -101,10 +101,10 @@ def _get_sh_sz_list():
     sz_df['instrument'] = sz_df.code.apply(szse_code_classify)
 
     sz_df['filename'] = sz_list
-    sz_df['last_modified'] = sz_df['filename'].apply(os.path.getmtime)
+    sz_df['last_modified'] = sz_df['filename'].apply(lambda x: os.path.getmtime(os.path.join(sz_dir, x)))
 
     sh_df['filename'] = sh_list
-    sh_df['last_modified'] = sh_df['filename'].apply(os.path.getmtime)
+    sh_df['last_modified'] = sh_df['filename'].apply(lambda x: os.path.getmtime(os.path.join(sh_dir, x)))
 
     return pd.concat([sh_df, sz_df])
 
@@ -159,13 +159,14 @@ def _get_ds_list():
         lambda x: DS_CODE_TO_TYPE[x]['instrument'] if x in DS_CODE_TO_TYPE else None)
 
     ds_df['filename'] = ds_list
-    ds_df['last_modified'] = ds_df['filename'].apply(os.path.getmtime)
+    ds_df['last_modified'] = ds_df['filename'].apply(lambda x: os.path.getmtime(os.path.join(ds_dir, x)))
 
     return ds_df
 
 
 def get_security_list():
     securities: DataFrame = pd.concat([_get_sh_sz_list(), _get_ds_list()])
+    securities['last_modified'] = securities['last_modified'].apply(lambda x: pd.to_datetime(x, unit='s'))  # 日期正确，小时不对
     return securities.set_index('code')
 
 
