@@ -1124,13 +1124,41 @@ def calculate_bs_signals(security_df: pd.DataFrame, last_trade_date=None):
         return None
 
     df = pd.DataFrame(sig_list)
+    columns = df.columns.to_list()
+    # order = df.columns.sort_values(ascending=False).drop(['date', 'location', 'location_min', 'exchange'])
+
     order = [
         'code',
-        'xd', 'real_loc', 'xd_mark', 'weight', 'location', 'boll', 'dif', 'macd',
+        'xd', 'real_loc', 'xd_mark', 'weight', 'boll', 'dif', 'macd',
         'start',
-        'xd_min', 'real_loc_min', 'xd_mark_min', 'weight_min', 'location_min', 'boll_min', 'dif_min', 'macd_min',
+        'xd_min', 'real_loc_min', 'xd_mark_min', 'weight_min', 'boll_min', 'dif_min', 'macd_min',
         'amount',
     ]
+
+    index = 1
+    day_index = order.index('start')
+
+    while 'dif{}'.format(index) in columns:
+        order.insert(day_index, 'dif{}'.format(index))
+        if 'macd{}'.format(index) in columns:
+            day_index = day_index + 1
+            order.insert(day_index, 'macd{}'.format(index))
+
+        day_index = day_index + 1
+        index = index + 1
+
+    index = 1
+    min_index = order.index('amount')
+
+    while 'dif{}_min'.format(index) in columns:
+        order.insert(min_index, 'dif{}_min'.format(index))
+        if 'macd{}_min'.format(index) in columns:
+            min_index = min_index + 1
+            order.insert(min_index, 'macd{}_min'.format(index))
+
+        min_index = min_index + 1
+        index = index + 1
+
     df = df[order].sort_values(by=['xd', 'real_loc'], ascending=[False, True])
 
     util_log_info("===There are {} Signal=======".format(index))
@@ -1212,12 +1240,12 @@ def main_single():
 
 if __name__ == '__main__':
     # main_consumer()
-    last_trade_date = pd.to_datetime('2021-03-09')
-    # last_trade_date = None
+    # last_trade_date = pd.to_datetime('2021-03-09')
+    last_trade_date = None
     main_signal(
-        security_blocks=['future'],
-        # security_blocks=['stock', 'convertible', 'ETF'],
-        # security_blocks=['index', 'hkconnect'],
+        # security_blocks=['future'],
+        security_blocks=['stock', 'convertible', 'ETF', 'index'],
+        # security_blocks=['hkconnect'],
         # security_blocks=['index'],
         last_trade_date=last_trade_date
     )
