@@ -81,6 +81,6 @@ def get_financial_scores():
 
 
 if __name__ == '__main__':
-    # save_financial_files()           # 更新数据库财务数据
+    save_financial_files()           # 更新数据库财务数据
     scores = get_financial_scores()
-    scores.to_csv('scores.csv')
+    scores.to_csv('E:\\signal\\scores.csv')

@@ -100,6 +100,12 @@ def _get_sh_sz_list():
 
     sz_df['instrument'] = sz_df.code.apply(szse_code_classify)
 
+    sz_df['filename'] = sz_list
+    sz_df['last_modified'] = sz_df['filename'].apply(os.path.getmtime)
+
+    sh_df['filename'] = sh_list
+    sh_df['last_modified'] = sh_df['filename'].apply(os.path.getmtime)
+
     return pd.concat([sh_df, sz_df])
 
 
@@ -151,6 +157,9 @@ def _get_ds_list():
     ds_df['exchange'] = ds_df.tdx_code.apply(lambda x: DS_CODE_TO_TYPE[x]['exchange'] if x in DS_CODE_TO_TYPE else None)
     ds_df['instrument'] = ds_df.tdx_code.apply(
         lambda x: DS_CODE_TO_TYPE[x]['instrument'] if x in DS_CODE_TO_TYPE else None)
+
+    ds_df['filename'] = ds_list
+    ds_df['last_modified'] = ds_df['filename'].apply(os.path.getmtime)
 
     return ds_df
 
@@ -360,7 +369,7 @@ if __name__ == "__main__":
     # ds_df = _get_ds_list()
     # sz_sh_df = _get_sh_sz_list()
     security_df = get_security_list()
-    security_df.to_csv('security.csv')
+    security_df.to_csv('E:\\signal\\security.csv')
     # hq = fetch_future_day('rbl8')
     # hq = get_bar('rbl8', freq='week')
     # df = get_index_block()
