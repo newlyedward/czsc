@@ -1085,23 +1085,47 @@ def calculate_bs_signals(security_df: pd.DataFrame, last_trade_date=None):
             continue
 
         df = pd.DataFrame(sig_min_list).set_index('date')
-        df = df[df.index > last_trade_date]  # 5分钟数据有可能缺失，造成实际没数据
-        df = df[df['xd_mark'] * xd1_mark > 0]  # 只保留和day同向的买卖点
+        # df = df[df.index > last_trade_date]  # 5分钟数据有可能缺失，造成实际没数据
+        # df = df[df['xd_mark'] * xd1_mark > 0]  # 只保留和day同向的买卖点
+
+        bar_df = pd.DataFrame(czsc_min.bars).set_index('date')
+        bar_df = bar_df[bar_df.index > last_trade_date]
+
+        if xd1_mark > 0:
+            idx = bar_df['low'].idxmin()
+        else:
+            idx = bar_df['high'].idxmax()
 
         if df.empty:
             util_log_info("===Please Download {} {} 5min Data===".format(code, exchange))
             continue
 
-        df = df.sort_values(by=['xd', 'xd_mark', 'location'], ascending=[False, xd1_mark > 0, xd1_mark > 0])
+        # df = df.sort_values(by=['xd', 'xd_mark', 'location'], ascending=[False, xd1_mark > 0, xd1_mark > 0])
 
-        last_min_sig = df.iloc[0].to_dict()
+        # last_min_sig = df.iloc[0].to_dict()
+        try:
+            last_min_sig = df.loc[idx].to_dict()
+        except:
+            util_log_info("{} {} Have a opposite Signal=======".format(code, exchange))
+            continue
 
         if last_min_sig['xd'] < 2 or last_min_sig['xd_mark'] not in [1, -1]:
             util_log_info("==={} xd:{}, xd_mark:{}===".format(code, last_min_sig['xd'], last_min_sig['xd_mark']))
             continue
 
+        idx = 1
+
+        last_min_sig.update(macd=last_min_sig.get('dif') + last_min_sig.get('macd'))
+
+        while 'dif{}'.format(idx) in last_min_sig:
+            last_min_sig.update(macd=last_min_sig.get('macd') +
+                                     last_min_sig.get('dif{}'.format(idx)) + last_min_sig.get('macd{}'.format(idx)))
+            idx = idx + 1
+
         for key in last_min_sig:
             last_day_sig[key + '_min'] = last_min_sig[key]
+
+
 
         last_day_sig['start'] = start
 
@@ -1131,35 +1155,35 @@ def calculate_bs_signals(security_df: pd.DataFrame, last_trade_date=None):
         'code',
         'xd', 'real_loc', 'xd_mark', 'weight', 'boll', 'dif', 'macd',
         'start',
-        'xd_min', 'real_loc_min', 'xd_mark_min', 'weight_min', 'boll_min', 'dif_min', 'macd_min',
+        'xd_min', 'real_loc_min', 'xd_mark_min', 'weight_min', 'boll_min', 'macd_min',
         'amount',
     ]
 
-    index = 1
+    idx = 1
     day_index = order.index('start')
 
-    while 'dif{}'.format(index) in columns:
-        order.insert(day_index, 'dif{}'.format(index))
-        if 'macd{}'.format(index) in columns:
+    while 'dif{}'.format(idx) in columns:
+        order.insert(day_index, 'dif{}'.format(idx))
+        if 'macd{}'.format(idx) in columns:
             day_index = day_index + 1
-            order.insert(day_index, 'macd{}'.format(index))
+            order.insert(day_index, 'macd{}'.format(idx))
 
         day_index = day_index + 1
-        index = index + 1
+        idx = idx + 1
 
-    index = 1
+    idx = 1
     min_index = order.index('amount')
 
-    while 'dif{}_min'.format(index) in columns:
-        order.insert(min_index, 'dif{}_min'.format(index))
-        if 'macd{}_min'.format(index) in columns:
-            min_index = min_index + 1
-            order.insert(min_index, 'macd{}_min'.format(index))
+    # while 'dif{}_min'.format(idx) in columns:
+    #     order.insert(min_index, 'dif{}_min'.format(idx))
+    #     if 'macd{}_min'.format(idx) in columns:
+    #         min_index = min_index + 1
+    #         order.insert(min_index, 'macd{}_min'.format(idx))
+    #
+    #     min_index = min_index + 1
+    #     idx = idx + 1
 
-        min_index = min_index + 1
-        index = index + 1
-
-    df = df[order].sort_values(by=['xd', 'real_loc'], ascending=[False, True])
+    df = df[order].sort_values(by=['macd_min', 'xd', 'real_loc'], ascending=[False, False, True])
 
     util_log_info("===There are {} Signal=======".format(index))
     return df
@@ -1214,7 +1238,7 @@ def main_signal(last_trade_date=None, security_blocks=None):
 
 
 def main_single():
-    code = 'apl9'
+    code = 'apl8'
     exchange = 'szse'
     end = '2021-08-27'
     czsc_day = CzscMongo(code=code, end=end, freq='day', exchange=exchange)
@@ -1240,13 +1264,13 @@ def main_single():
 
 if __name__ == '__main__':
     # main_consumer()
-    # last_trade_date = pd.to_datetime('2021-03-09')
+    # last_trade_date = pd.to_datetime('2021-03-10')
     last_trade_date = None
     main_signal(
-        # security_blocks=['future'],
-        security_blocks=['stock', 'convertible', 'ETF', 'index'],
+        security_blocks=['future'],
+        # security_blocks=['future', 'stock', 'convertible', 'ETF', 'index'],
         # security_blocks=['hkconnect'],
-        # security_blocks=['index'],
+        # security_blocks=['stock'],
         last_trade_date=last_trade_date
     )
     # main_single()
