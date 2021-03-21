@@ -1223,16 +1223,23 @@ def main_signal(last_trade_date=None, security_blocks=None):
     security_df = security_df[security_df['last_modified'].apply(lambda x: x >= last_trade_date)]
 
     for class_name in security_blocks:
-        df = calculate_bs_signals(security_df[security_df['class'] == class_name], last_trade_date)
-
-        if df is None or df.empty:
-            continue
+        sub_security_df = security_df[security_df['class'] == class_name]
 
         if class_name == 'stock':
             filename = 'E:\\signal\\scores.csv'
             scores_df = pd.read_csv(filename)
             scores_df['code'] = scores_df['code'].apply(lambda x: "{:0>6d}".format(x))
             scores_df.set_index('code', inplace=True)
+            sub_security_df = sub_security_df.join(scores_df, on='code')
+            sub_security_df = sub_security_df[sub_security_df['finance'] > 40]
+            sub_security_df = sub_security_df[sub_security_df['holders'] > 10]
+
+        df = calculate_bs_signals(sub_security_df, last_trade_date)
+
+        if df is None or df.empty:
+            continue
+
+        if class_name == 'stock':
             df = df.join(scores_df, on='code')
         df.to_csv('E:\\signal\\{}_signal_{}.csv'.format(class_name, last_trade_date.strftime('%Y%m%d')), index=False)
 
@@ -1267,10 +1274,10 @@ if __name__ == '__main__':
     # last_trade_date = pd.to_datetime('2021-03-10')
     last_trade_date = None
     main_signal(
-        security_blocks=['future'],
+        # security_blocks=['future'],
         # security_blocks=['future', 'stock', 'convertible', 'ETF', 'index'],
         # security_blocks=['hkconnect'],
-        # security_blocks=['stock'],
+        security_blocks=['stock'],
         last_trade_date=last_trade_date
     )
     # main_single()
