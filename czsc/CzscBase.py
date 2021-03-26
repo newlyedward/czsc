@@ -480,7 +480,10 @@ class XdList(object):
                 # resistance = zs['GG'][-1]['value'] / xd['value'] - 1
                 # support = zs['ZG']['value'] / xd['value'] - 1
             elif xd['value'] > zs['ZD']['value']:
-                xd_mark = -2.5
+                if sig['weight'] == 1:
+                    xd_mark = -2
+                else:
+                    xd_mark = -2.5
                 # resistance = zs['ZG']['value'] / xd['value'] - 1
                 # support = zs['ZD']['value'] / xd['value'] - 1
             elif xd['value'] > zs['DD'][-1]['value']:
@@ -508,7 +511,10 @@ class XdList(object):
                 # resistance = zs['GG'][-1]['value'] / xd['value'] - 1
                 # support = zs['ZG']['value'] / xd['value'] - 1
             elif xd['value'] > zs['ZD']['value']:
-                xd_mark = 2.5
+                if sig['weight'] == 1:
+                    xd_mark = 2
+                else:
+                    xd_mark = 2.5
                 # resistance = zs['ZG']['value'] / xd['value'] - 1
                 # support = zs['ZD']['value'] / xd['value'] - 1
             elif xd['value'] > zs['DD'][-1]['value']:
@@ -1245,7 +1251,7 @@ def main_signal(last_trade_date=None, security_blocks=None):
 
 
 def main_single():
-    code = 'apl8'
+    code = '300559'
     exchange = 'szse'
     end = '2021-08-27'
     czsc_day = CzscMongo(code=code, end=end, freq='day', exchange=exchange)
@@ -1272,12 +1278,12 @@ def main_single():
 if __name__ == '__main__':
     # main_consumer()
     # last_trade_date = pd.to_datetime('2021-03-10')
-    last_trade_date = None
-    main_signal(
-        # security_blocks=['future'],
-        # security_blocks=['future', 'stock', 'convertible', 'ETF', 'index'],
-        # security_blocks=['hkconnect'],
-        security_blocks=['stock'],
-        last_trade_date=last_trade_date
-    )
-    # main_single()
+    # last_trade_date = None
+    # main_signal(
+    #     # security_blocks=['future'],
+    #     security_blocks=['future', 'stock', 'convertible', 'ETF', 'index'],
+    #     # security_blocks=['hkconnect'],
+    #     # security_blocks=['stock'],
+    #     last_trade_date=last_trade_date
+    # )
+    main_single()
