@@ -1050,18 +1050,22 @@ def calculate_bs_signals(security_df: pd.DataFrame, last_trade_date=None):
             continue
 
             # 取周线级别的起点
-        xd1_list = czsc_day.xd_list.next
+        xd_list = czsc_day.xd_list
+        xd = 0
+        while xd < last_day_sig['xd']:
+            xd_list = xd_list.next
+            xd = xd + 1
 
-        if len(xd1_list) < 1:
+        if len(xd_list) < 1:
             continue
 
-        last_xd = xd1_list.xd_list[-1]
-        xd1_mark = last_day_sig['xd_mark']
+        last_xd = xd_list.xd_list[-1]
+        xd_mark = last_day_sig['xd_mark']
 
-        if last_xd['fx_mark'] * xd1_mark < 0:
-            if len(xd1_list) < 2:
+        if last_xd['fx_mark'] * xd_mark < 0:
+            if len(xd_list) < 2:
                 continue
-            last_xd = xd1_list.xd_list[-2]
+            last_xd = xd_list.xd_list[-2]
 
         start = last_xd['fx_start']
 
@@ -1097,7 +1101,7 @@ def calculate_bs_signals(security_df: pd.DataFrame, last_trade_date=None):
         bar_df = pd.DataFrame(czsc_min.bars).set_index('date')
         bar_df = bar_df[bar_df.index > last_trade_date]
 
-        if xd1_mark > 0:
+        if xd_mark > 0:
             idx = bar_df['low'].idxmin()
         else:
             idx = bar_df['high'].idxmax()
@@ -1115,7 +1119,7 @@ def calculate_bs_signals(security_df: pd.DataFrame, last_trade_date=None):
             util_log_info("{} {} Have a opposite Signal=======".format(code, exchange))
             continue
 
-        if last_min_sig['xd'] < 2 or last_min_sig['xd_mark'] not in [1, -1]:
+        if last_min_sig['xd'] < 0 or last_min_sig['xd_mark'] not in [1, -1]:
             util_log_info("==={} xd:{}, xd_mark:{}===".format(code, last_min_sig['xd'], last_min_sig['xd_mark']))
             continue
 
@@ -1130,8 +1134,6 @@ def calculate_bs_signals(security_df: pd.DataFrame, last_trade_date=None):
 
         for key in last_min_sig:
             last_day_sig[key + '_min'] = last_min_sig[key]
-
-
 
         last_day_sig['start'] = start
 
@@ -1278,12 +1280,12 @@ def main_single():
 if __name__ == '__main__':
     # main_consumer()
     # last_trade_date = pd.to_datetime('2021-03-10')
-    # last_trade_date = None
-    # main_signal(
-    #     # security_blocks=['future'],
-    #     security_blocks=['future', 'stock', 'convertible', 'ETF', 'index'],
-    #     # security_blocks=['hkconnect'],
-    #     # security_blocks=['stock'],
-    #     last_trade_date=last_trade_date
-    # )
-    main_single()
+    last_trade_date = None
+    main_signal(
+        security_blocks=['future'],
+        # security_blocks=['future', 'stock', 'convertible', 'ETF', 'index'],
+        # security_blocks=['hkconnect'],
+        # security_blocks=['stock'],
+        last_trade_date=last_trade_date
+    )
+    # main_single()
