@@ -1049,25 +1049,27 @@ def calculate_bs_signals(security_df: pd.DataFrame, last_trade_date=None):
             )
             continue
 
-            # 取周线级别的起点
-        xd_list = czsc_day.xd_list
-        xd = 0
-        while xd < last_day_sig['xd']:
-            xd_list = xd_list.next
-            xd = xd + 1
+        # 笔中枢走势的起点，如果是上升趋势的买点，从当前中枢的最高点开始计算，如果是卖点，从上升趋势的起点开始
+        zs_list = czsc_day.xd_list.zs_list
 
-        if len(xd_list) < 1:
+        if len(zs_list) < 1:
             continue
 
-        last_xd = xd_list.xd_list[-1]
         xd_mark = last_day_sig['xd_mark']
 
-        if last_xd['fx_mark'] * xd_mark < 0:
-            if len(xd_list) < 2:
-                continue
-            last_xd = xd_list.xd_list[-2]
+        idx = -1
+        while xd_mark * zs_list[idx]['location'] < 0:
+            idx = idx - 1
 
-        start = last_xd['fx_start']
+        if xd_mark > 0:
+            xd = zs_list[index]['GG'][-1]
+        elif xd_mark < 0:
+            xd = zs_list[index]['DD'][-1]
+        else:
+            util_log_info("========={} {} has wrong xd_mark========".format(code, exchange))
+            continue
+
+        start = xd['fx_start']
 
         czsc_min = CzscMongo(code=code, start=start, end=last_trade_time, freq='5min', exchange=exchange)
 
@@ -1119,7 +1121,8 @@ def calculate_bs_signals(security_df: pd.DataFrame, last_trade_date=None):
             util_log_info("{} {} Have a opposite Signal=======".format(code, exchange))
             continue
 
-        if last_min_sig['xd'] < 0 or last_min_sig['xd_mark'] not in [1, -1]:
+        # 顺趋势买卖点为1，-1，逆趋势级别要大
+        if last_min_sig['xd'] < 2 and last_min_sig['xd_mark'] not in [1, -1]:
             util_log_info("==={} xd:{}, xd_mark:{}===".format(code, last_min_sig['xd'], last_min_sig['xd_mark']))
             continue
 
@@ -1179,8 +1182,8 @@ def calculate_bs_signals(security_df: pd.DataFrame, last_trade_date=None):
         day_index = day_index + 1
         idx = idx + 1
 
-    idx = 1
-    min_index = order.index('amount')
+    # idx = 1
+    # min_index = order.index('amount')
 
     # while 'dif{}_min'.format(idx) in columns:
     #     order.insert(min_index, 'dif{}_min'.format(idx))
