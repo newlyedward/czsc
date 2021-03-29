@@ -1050,26 +1050,36 @@ def calculate_bs_signals(security_df: pd.DataFrame, last_trade_date=None):
             continue
 
         # 笔中枢走势的起点，如果是上升趋势的买点，从当前中枢的最高点开始计算，如果是卖点，从上升趋势的起点开始
-        zs_list = czsc_day.xd_list.zs_list
+        xd_list = czsc_day.xd_list
+        zs_list = xd_list.zs_list
 
         if len(zs_list) < 1:
             continue
 
         xd_mark = last_day_sig['xd_mark']
+        xd = xd_list[-1]
 
-        idx = -1
-        while xd_mark * zs_list[idx]['location'] < 0:
-            idx = idx - 1
+        # idx = -1
+        # while xd_mark * zs_list[idx]['location'] < 0:
+        #     idx = idx - 1
+        #
+        # if xd_mark > 0:
+        #     xd = zs_list[idx]['GG'][-1] if zs_list[idx]['GG'][-1]['value'] > zs_list[-1]['GG'][-1]['value'] else zs_list[-1]['GG'][-1]
+        # elif xd_mark < 0:
+        #     xd = zs_list[idx]['DD'][-1] if zs_list[idx]['DD'][-1]['value'] < zs_list[-1]['DD'][-1]['value'] else zs_list[-1]['DD'][-1]
+        # else:
+        #     util_log_info("========={} {} has wrong xd_mark========".format(code, exchange))
+        #     continue
 
-        if xd_mark > 0:
-            xd = zs_list[index]['GG'][-1]
-        elif xd_mark < 0:
-            xd = zs_list[index]['DD'][-1]
-        else:
-            util_log_info("========={} {} has wrong xd_mark========".format(code, exchange))
-            continue
+        # if xd_mark > 0:
+        #     xd = zs_list[-1]['GG'][-1]
+        # elif xd_mark < 0:
+        #     xd = zs_list[-1]['DD'][-1]
+        # else:
+        #     util_log_info("========={} {} has wrong xd_mark========".format(code, exchange))
+        #     continue
 
-        start = xd['fx_start']
+        start = xd.get('fx_start', xd_list[-2].get('fx_start'))
 
         czsc_min = CzscMongo(code=code, start=start, end=last_trade_time, freq='5min', exchange=exchange)
 
@@ -1097,8 +1107,6 @@ def calculate_bs_signals(security_df: pd.DataFrame, last_trade_date=None):
             continue
 
         df = pd.DataFrame(sig_min_list).set_index('date')
-        # df = df[df.index > last_trade_date]  # 5分钟数据有可能缺失，造成实际没数据
-        # df = df[df['xd_mark'] * xd1_mark > 0]  # 只保留和day同向的买卖点
 
         bar_df = pd.DataFrame(czsc_min.bars).set_index('date')
         bar_df = bar_df[bar_df.index > last_trade_date]
@@ -1112,23 +1120,28 @@ def calculate_bs_signals(security_df: pd.DataFrame, last_trade_date=None):
             util_log_info("===Please Download {} {} 5min Data===".format(code, exchange))
             continue
 
-        # df = df.sort_values(by=['xd', 'xd_mark', 'location'], ascending=[False, xd1_mark > 0, xd1_mark > 0])
-
-        # last_min_sig = df.iloc[0].to_dict()
         try:
             last_min_sig = df.loc[idx].to_dict()
         except:
             util_log_info("{} {} Have a opposite Signal=======".format(code, exchange))
             continue
 
-        # 顺趋势买卖点为1，-1，逆趋势级别要大
-        if last_min_sig['xd'] < 2 and last_min_sig['xd_mark'] not in [1, -1]:
+        if last_min_sig['xd_mark'] * xd_mark < 0:     # 日内高低点不一定是高级别买卖点
+            util_log_info("{} {} Have a opposite Signal=======".format(code, exchange))
+            continue
+
+        # 顺趋势买卖点为1，-1，逆趋势级别要大,小于0为逆趋势
+        if (xd_mark * zs_list[-1]['location'] <= 0 and last_min_sig['xd'] < 2) or \
+                (xd_mark * zs_list[-1]['location'] >= 0 and last_min_sig['xd_mark'] not in [1, -1]):
             util_log_info("==={} xd:{}, xd_mark:{}===".format(code, last_min_sig['xd'], last_min_sig['xd_mark']))
             continue
 
         idx = 1
 
-        last_min_sig.update(macd=last_min_sig.get('dif') + last_min_sig.get('macd'))
+        try:
+            last_min_sig.update(macd=last_min_sig.get('dif') + last_min_sig.get('macd'))
+        except TypeError:
+            util_log_info("{} {} has no macd value=======".format(code, exchange))
 
         while 'dif{}'.format(idx) in last_min_sig:
             last_min_sig.update(macd=last_min_sig.get('macd') +
@@ -1182,19 +1195,7 @@ def calculate_bs_signals(security_df: pd.DataFrame, last_trade_date=None):
         day_index = day_index + 1
         idx = idx + 1
 
-    # idx = 1
-    # min_index = order.index('amount')
-
-    # while 'dif{}_min'.format(idx) in columns:
-    #     order.insert(min_index, 'dif{}_min'.format(idx))
-    #     if 'macd{}_min'.format(idx) in columns:
-    #         min_index = min_index + 1
-    #         order.insert(min_index, 'macd{}_min'.format(idx))
-    #
-    #     min_index = min_index + 1
-    #     idx = idx + 1
-
-    df = df[order].sort_values(by=['macd_min', 'xd', 'real_loc'], ascending=[False, False, True])
+    df = df[order].sort_values(by=['xd_min', 'macd_min',  'weight_min'], ascending=[False, False, True])
 
     util_log_info("===There are {} Signal=======".format(index))
     return df
@@ -1256,7 +1257,7 @@ def main_signal(last_trade_date=None, security_blocks=None):
 
 
 def main_single():
-    code = '300559'
+    code = 'sal9'
     exchange = 'szse'
     end = '2021-08-27'
     czsc_day = CzscMongo(code=code, end=end, freq='day', exchange=exchange)
@@ -1285,9 +1286,9 @@ if __name__ == '__main__':
     # last_trade_date = pd.to_datetime('2021-03-10')
     last_trade_date = None
     main_signal(
-        security_blocks=['future'],
+        # security_blocks=['future'],
         # security_blocks=['future', 'stock', 'convertible', 'ETF', 'index'],
-        # security_blocks=['hkconnect'],
+        security_blocks=['hkconnect'],
         # security_blocks=['stock'],
         last_trade_date=last_trade_date
     )
