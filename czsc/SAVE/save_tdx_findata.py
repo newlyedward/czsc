@@ -47,8 +47,22 @@ def save_financial_files():
     coll.create_index(
         [("code", ASCENDING), ("report_date", ASCENDING)], unique=True)
 
+    df = pd.DataFrame(os.listdir(_CW_DIR), columns=['filename'])
+
     pattern = "^(gpcw)(?P<date>\d{8})\.zip"  # gpcw20210930.dat
-    for filename in os.listdir(_CW_DIR):
+    df['re'] = df['filename'].apply(lambda x: re.match(pattern, x))
+    df = df.dropna()
+    df['date'] = df['re'].apply(lambda x: int(x.groupdict()['date']))
+
+    df['last_modified'] = df['filename'].apply(
+        lambda x: pd.to_datetime(os.path.getmtime(os.path.join(_CW_DIR, x)), unit='s'))
+
+    last_modified = df.sort_values(by='last_modified', ascending=[False])['last_modified'].iloc[0]
+    last_modified = pd.to_datetime(last_modified.strftime('%Y-%m-%d'))
+    df = df[df['last_modified'] > last_modified]
+    df.sort_values(by='last_modified', ascending=[False]).head()
+
+    for filename in df['filename'].to_list():
         try:
             date = int(re.match(pattern, filename).groupdict()['date'])
         except:
