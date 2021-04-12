@@ -958,7 +958,7 @@ class CzscMongo(CzscBase):
             return
 
         sig_df = pd.DataFrame(self.sig_list).set_index('date')
-        filename = 'E:\\signal\\{}_{}_sig.csv'.format(self.code, self.freq)
+        filename = 'E:\\signal\\{}_{}_{}.csv'.format(self.code, self.freq, sig_df.index[-1].strftime('%Y-%m-%d'))
         sig_df.to_csv(filename)
 
     def to_df(self):
@@ -1049,6 +1049,20 @@ def calculate_bs_signals(security_df: pd.DataFrame, last_trade_date=None):
             )
             continue
 
+        if item['instrument'] == 'future':
+            amount = czsc_day.bars[-1]['volume']
+            if amount < 10000:
+                util_log_info(
+                    "===={} {} amount is few!====".format(code, exchange)
+                )
+                continue
+        elif exchange in ['hkconnect']:
+            amount = czsc_day.bars[-1]['hk_stock_amount']
+        else:
+            amount = czsc_day.bars[-1]['amount']
+
+
+
         # 笔中枢走势的起点，如果是上升趋势的买点，从当前中枢的最高点开始计算，如果是卖点，从上升趋势的起点开始
         xd_list = czsc_day.xd_list
         zs_list = xd_list.zs_list
@@ -1058,26 +1072,6 @@ def calculate_bs_signals(security_df: pd.DataFrame, last_trade_date=None):
 
         xd_mark = last_day_sig['xd_mark']
         xd = xd_list[-1]
-
-        # idx = -1
-        # while xd_mark * zs_list[idx]['location'] < 0:
-        #     idx = idx - 1
-        #
-        # if xd_mark > 0:
-        #     xd = zs_list[idx]['GG'][-1] if zs_list[idx]['GG'][-1]['value'] > zs_list[-1]['GG'][-1]['value'] else zs_list[-1]['GG'][-1]
-        # elif xd_mark < 0:
-        #     xd = zs_list[idx]['DD'][-1] if zs_list[idx]['DD'][-1]['value'] < zs_list[-1]['DD'][-1]['value'] else zs_list[-1]['DD'][-1]
-        # else:
-        #     util_log_info("========={} {} has wrong xd_mark========".format(code, exchange))
-        #     continue
-
-        # if xd_mark > 0:
-        #     xd = zs_list[-1]['GG'][-1]
-        # elif xd_mark < 0:
-        #     xd = zs_list[-1]['DD'][-1]
-        # else:
-        #     util_log_info("========={} {} has wrong xd_mark========".format(code, exchange))
-        #     continue
 
         start = xd.get('fx_start', xd_list[-2].get('fx_start'))
 
@@ -1152,13 +1146,6 @@ def calculate_bs_signals(security_df: pd.DataFrame, last_trade_date=None):
             last_day_sig[key + '_min'] = last_min_sig[key]
 
         last_day_sig['start'] = start
-
-        if item['instrument'] == 'future':
-            amount = czsc_day.bars[-1]['volume']
-        elif exchange in ['hkconnect']:
-            amount = czsc_day.bars[-1]['hk_stock_amount']
-        else:
-            amount = czsc_day.bars[-1]['amount']
 
         last_day_sig.update(amount=amount, code=code, exchange=exchange)
 
@@ -1253,16 +1240,18 @@ def main_signal(last_trade_date=None, security_blocks=None):
 
         if class_name == 'stock':
             df = df.join(scores_df, on='code')
+        elif class_name == 'future':
+            df = df[df['amount'] > 10000]
         df.to_csv('E:\\signal\\{}_signal_{}.csv'.format(class_name, last_trade_date.strftime('%Y%m%d')), index=False)
 
 
 def main_single():
-    code = 'sal9'
+    code = 'pbl8'
     exchange = 'szse'
-    end = '2021-08-27'
+    end = '2021-02-04'
     czsc_day = CzscMongo(code=code, end=end, freq='day', exchange=exchange)
     czsc_day.run()
-    xd1_list = czsc_day.xd_list.next
+    xd1_list = czsc_day.xd_list
     xd1_mark = xd1_list.sig_list[-1]['xd_mark']
     last_xd = xd1_list.xd_list[-1]
     if last_xd['fx_mark'] * xd1_mark < 0:
@@ -1283,12 +1272,12 @@ def main_single():
 
 if __name__ == '__main__':
     # main_consumer()
-    # last_trade_date = pd.to_datetime('2021-03-10')
+    # last_trade_date = pd.to_datetime('2021-02-02')
     last_trade_date = None
     main_signal(
-        # security_blocks=['future'],
+        security_blocks=['future'],
         # security_blocks=['future', 'stock', 'convertible', 'ETF', 'index'],
-        security_blocks=['hkconnect'],
+        # security_blocks=['hkconnect'],
         # security_blocks=['stock'],
         last_trade_date=last_trade_date
     )
