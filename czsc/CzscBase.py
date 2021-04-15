@@ -1195,7 +1195,7 @@ def calculate_bs_signals(security_df: pd.DataFrame, last_trade_date=None):
         day_index = day_index + 1
         idx = idx + 1
 
-    df = df[order].sort_values(by=['xd_min', 'macd_min', 'weight_min'], ascending=[False, False, True])
+    df = df[order].sort_values(by=['xd', 'xd_min', 'macd_min', 'weight'], ascending=[False, False, False, False])
 
     util_log_info("===There are {} Signal=======".format(index))
     return df
