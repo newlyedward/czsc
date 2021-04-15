@@ -1084,8 +1084,12 @@ def calculate_bs_signals(security_df: pd.DataFrame, last_trade_date=None):
 
         czsc_min = CzscMongo(code=code, start=start, end=last_trade_time, freq='5min', exchange=exchange)
 
-        if len(czsc_min.data) < 1:
-            util_log_info("========={} {} 0 5min Quotes========".format(code, exchange))
+        try:
+            if len(czsc_min.data) < 1:
+                util_log_info("========={} {} 0 5min Quotes========".format(code, exchange))
+                continue
+        except:
+            util_log_info("========={} {} 5min Quotes file is not exists!========".format(code, exchange))
             continue
 
         if czsc_min.data.iloc[-1]['date'] < last_trade_date:
@@ -1289,8 +1293,8 @@ if __name__ == '__main__':
     last_trade_date = None
     main_signal(
         # security_blocks=['future'],
-        security_blocks=['hkconnect', 'stock', 'convertible', 'ETF', 'index'],
-        # security_blocks=['hkconnect'],
+        # security_blocks=['future', 'stock', 'convertible', 'ETF', 'index'],
+        security_blocks=['hkconnect'],
         # security_blocks=['stock'],
         last_trade_date=last_trade_date
     )
