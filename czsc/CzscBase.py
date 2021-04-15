@@ -1049,17 +1049,23 @@ def calculate_bs_signals(security_df: pd.DataFrame, last_trade_date=None):
             )
             continue
 
+        # 流动性过滤，future为成交量过滤
         if item['instrument'] == 'future':
             amount = czsc_day.bars[-1]['volume']
             if amount < 10000:
                 util_log_info(
-                    "===={} {} amount is few!====".format(code, exchange)
+                    "===={} {} volume is few!====".format(code, exchange)
                 )
                 continue
         elif exchange in ['hkconnect']:
             amount = czsc_day.bars[-1]['hk_stock_amount']
         else:
             amount = czsc_day.bars[-1]['amount']
+            if amount < 10000000:
+                util_log_info(
+                    "===={} {} amount is few!====".format(code, exchange)
+                )
+                continue
 
         # 笔中枢走势的起点，如果是上升趋势的买点，从当前中枢的最高点开始计算，如果是卖点，从上升趋势的起点开始
         xd_list = czsc_day.xd_list
@@ -1282,8 +1288,8 @@ if __name__ == '__main__':
     # last_trade_date = pd.to_datetime('2021-02-02')
     last_trade_date = None
     main_signal(
-        security_blocks=['future'],
-        # security_blocks=['future', 'stock', 'convertible', 'ETF', 'index'],
+        # security_blocks=['future'],
+        security_blocks=['hkconnect', 'stock', 'convertible', 'ETF', 'index'],
         # security_blocks=['hkconnect'],
         # security_blocks=['stock'],
         last_trade_date=last_trade_date
