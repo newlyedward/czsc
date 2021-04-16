@@ -239,7 +239,7 @@ class XdList(object):
                 )
 
                 zs = {
-                    'zs_start': xd_list[-3],
+                    'zs_start': xd_list[-4],
                     'ZG': xd,
                     'ZD': zs_end,
                     'GG': [xd],
@@ -269,7 +269,7 @@ class XdList(object):
                     real_loc=last_zs['real_loc'] - 1 if last_zs['weight'] == 2 else last_zs['real_loc']
                 )
                 zs = {
-                    'zs_start': xd_list[-3],
+                    'zs_start': xd_list[-4],
                     'ZG': zs_end,
                     'ZD': xd,
                     'GG': [zs_end],
@@ -450,6 +450,9 @@ class XdList(object):
 
         zs = self.zs_list[-1]
         xd = self.xd_list[-1]
+        xd_list = zs['xd_list'].copy()
+        if 'zs_start' in zs:
+            xd_list.insert(0, zs['zs_start'])
 
         sig = {
             'date': self.bars[-1]['date'],
@@ -531,37 +534,45 @@ class XdList(object):
         # sig.update(xd_mark=xd_mark, support=support * 100, resistance=resistance * 100)
         sig.update(xd_mark=xd_mark)
 
-        # if xd_mark not in [1, -1]:  # 只有1买-1卖需要计算macd背离的情况
-        #     self.sig_list.append(sig)
-        #     return
+        start_xd = xd_list[-1]
 
-        xd_list = zs['xd_list'][-2::-2]
+        if sig['date'] > pd.to_datetime('2016-04-01'):
+            print('ok')
+
+        if xd_mark in [3, -3, 4, -4]:
+            sig.update(dif=0, macd=0, start=start_xd['fx_start'])
+            self.sig_list.append(sig)
+            return
+
+        direction = np.sign(xd['fx_mark'])
+
         xd_list.reverse()
 
-        compare_dif = None
-        compare_macd = None
-
-        # 没有进入段，或者与进入段反向
-        if xd_list[0]['fx_mark'] * xd['fx_mark'] < 0 or 'zs_start' not in zs:
-            if xd['fx_mark'] < 0:
-                peak_date = zs['GG'][-1]['date']
-            else:
-                peak_date = zs['DD'][-1]['date']
-
-            for _xd in xd_list:
-                if _xd['date'] > peak_date:
-                    compare_dif = _xd.get('dif')
-                    compare_macd = _xd.get('macd')
-
+        for idx, _xd in enumerate(xd_list[1:]):
+            if idx % 2 == 0:  # 同向段
+                if _xd['value'] * direction > xd['value'] * direction:
                     break
-        else:
-            compare_dif = xd_list[0].get('dif')
-            compare_macd = xd_list[0].get('macd')
+            else:
+                if _xd['value'] * direction < start_xd['value'] * direction:
+                    start_xd = _xd
+                    # break
+
+        sig.update(start=start_xd['fx_start'])
+
+        index = xd_list.index(start_xd) - 1
+
+        if index < 0:  # 只有当前一笔，无法比较
+            sig.update(dif=0, macd=0, start=start_xd['fx_start'])
+            self.sig_list.append(sig)
+            return
+
+        cmp_xd = xd_list[index]
+
+        compare_dif = cmp_xd.get('dif')
+        compare_macd = cmp_xd.get('macd')
 
         dif = xd.get('dif')
         macd = xd.get('macd')
-
-        direction = np.sign(xd['fx_mark'])
 
         if compare_dif and dif:
             if dif * direction > compare_dif * direction:
@@ -1075,10 +1086,10 @@ def calculate_bs_signals(security_df: pd.DataFrame, last_trade_date=None):
             continue
 
         xd_mark = last_day_sig['xd_mark']
-        xd = xd_list[-2]
-
-        # if xd['fx_mark'] * xd_mark < 0 or 'fx_start' not in xd:
-        #     xd = xd_list.xd_list[-2]
+        if xd_mark < 0:
+            xd = zs_list[-1]['DD'][-1]
+        else:
+            xd = zs_list[-1]['GG'][-1]
 
         start = xd.get('fx_start')
 
@@ -1290,12 +1301,12 @@ def main_single():
 if __name__ == '__main__':
     # main_consumer()
     # last_trade_date = pd.to_datetime('2021-02-02')
-    last_trade_date = None
-    main_signal(
-        # security_blocks=['future'],
-        # security_blocks=['future', 'stock', 'convertible', 'ETF', 'index'],
-        security_blocks=['hkconnect'],
-        # security_blocks=['stock'],
-        last_trade_date=last_trade_date
-    )
-    # main_single()
+    # last_trade_date = None
+    # main_signal(
+    #     security_blocks=['future'],
+    #     # security_blocks=['future', 'stock', 'convertible', 'ETF', 'index'],
+    #     # security_blocks=['hkconnect'],
+    #     # security_blocks=['stock'],
+    #     last_trade_date=last_trade_date
+    # )
+    main_single()
