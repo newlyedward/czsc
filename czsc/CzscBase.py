@@ -536,11 +536,8 @@ class XdList(object):
 
         start_xd = xd_list[-1]
 
-        if sig['date'] > pd.to_datetime('2016-04-01'):
-            print('ok')
-
         if xd_mark in [3, -3, 4, -4]:
-            sig.update(dif=0, macd=0, start=start_xd['fx_start'])
+            sig.update(start=start_xd['fx_start'], dif=0, macd=0)
             self.sig_list.append(sig)
             return
 
@@ -562,7 +559,7 @@ class XdList(object):
         index = xd_list.index(start_xd) - 1
 
         if index < 0:  # 只有当前一笔，无法比较
-            sig.update(dif=0, macd=0, start=start_xd['fx_start'])
+            sig.update(dif=0, macd=0)
             self.sig_list.append(sig)
             return
 
@@ -864,8 +861,8 @@ class CzscMongo(CzscBase):
         chart = kline_pro(
             kline=self.bars, fx=self.fx_list,
             bs=[], xd=self.xd_list,
-            # title=self.code+'_'+self.freq, width='1520px', height='580px'
-            title=self.code + '_' + self.freq, width='2540px', height='850px'
+            title=self.code+'_'+self.freq, width='1520px', height='580px'
+            # title=self.code + '_' + self.freq, width='2540px', height='850px'
         )
 
         if not chart_path:
@@ -1086,12 +1083,13 @@ def calculate_bs_signals(security_df: pd.DataFrame, last_trade_date=None):
             continue
 
         xd_mark = last_day_sig['xd_mark']
-        if xd_mark < 0:
-            xd = zs_list[-1]['DD'][-1]
-        else:
-            xd = zs_list[-1]['GG'][-1]
-
-        start = xd.get('fx_start')
+        # if xd_mark < 0:
+        #     xd = zs_list[-1]['DD'][-1]
+        # else:
+        #     xd = zs_list[-1]['GG'][-1]
+        #
+        # start = xd.get('fx_start')
+        start = xd_list.sig_list[-1]['start']
 
         czsc_min = CzscMongo(code=code, start=start, end=last_trade_time, freq='5min', exchange=exchange)
 
@@ -1161,13 +1159,19 @@ def calculate_bs_signals(security_df: pd.DataFrame, last_trade_date=None):
         idx = 1
 
         try:
-            last_min_sig.update(macd=last_min_sig.get('dif') + last_min_sig.get('macd'))
+            dif = 0 if np.isnan(last_min_sig.get('dif')) else last_min_sig.get('dif')
+            macd = 0 if np.isnan(last_min_sig.get('macd')) else last_min_sig.get('macd')
+            last_min_sig.update(macd=dif + macd)
         except TypeError:
             util_log_info("{} {} has no macd value=======".format(code, exchange))
 
+        if code in ['IFL8', 'IFL9', 'RB2201', 'AG2107', 'OI2107', 'SS2106', 'RBL9']:
+            print('ok')
+
         while 'dif{}'.format(idx) in last_min_sig:
-            last_min_sig.update(macd=last_min_sig.get('macd') +
-                                     last_min_sig.get('dif{}'.format(idx)) + last_min_sig.get('macd{}'.format(idx)))
+            dif = 0 if np.isnan(last_min_sig.get('dif{}'.format(idx))) else last_min_sig.get('dif{}'.format(idx))
+            macd = 0 if np.isnan(last_min_sig.get('macd{}'.format(idx))) else last_min_sig.get('macd{}'.format(idx))
+            last_min_sig.update(macd=last_min_sig.get('macd') + dif + macd)
             idx = idx + 1
 
         for key in last_min_sig:
@@ -1274,18 +1278,19 @@ def main_signal(last_trade_date=None, security_blocks=None):
 
 
 def main_single():
-    code = 'pl9'
+    code = 'ifl8'
     exchange = 'szse'
     end = '2022-02-04'
     czsc_day = CzscMongo(code=code, end=end, freq='day', exchange=exchange)
     czsc_day.run()
-    xd1_list = czsc_day.xd_list
-    xd1_mark = xd1_list.sig_list[-1]['xd_mark']
-    last_xd = xd1_list.xd_list[-1]
-    if last_xd['fx_mark'] * xd1_mark < 0:
-        last_xd = xd1_list.xd_list[-2]
-
-    start = last_xd['fx_start']
+    xd_list = czsc_day.xd_list
+    # xd1_mark = xd_list.sig_list[-1]['xd_mark']
+    # last_xd = xd_list.xd_list[-1]
+    # if last_xd['fx_mark'] * xd1_mark < 0:
+    #     last_xd = xd_list.xd_list[-2]
+    #
+    # start = last_xd['fx_start']
+    start = xd_list.sig_list[-1]['start']
 
     czsc_day.draw()
     czsc_day.to_csv()
@@ -1301,12 +1306,12 @@ def main_single():
 if __name__ == '__main__':
     # main_consumer()
     # last_trade_date = pd.to_datetime('2021-02-02')
-    # last_trade_date = None
-    # main_signal(
-    #     security_blocks=['future'],
-    #     # security_blocks=['future', 'stock', 'convertible', 'ETF', 'index'],
-    #     # security_blocks=['hkconnect'],
-    #     # security_blocks=['stock'],
-    #     last_trade_date=last_trade_date
-    # )
-    main_single()
+    last_trade_date = None
+    main_signal(
+        security_blocks=['future'],
+        # security_blocks=['future', 'stock', 'convertible', 'ETF', 'index'],
+        # security_blocks=['hkconnect'],
+        # security_blocks=['stock'],
+        last_trade_date=last_trade_date
+    )
+    # main_single()
