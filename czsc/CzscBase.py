@@ -1156,8 +1156,6 @@ def calculate_bs_signals(security_df: pd.DataFrame, last_trade_date=None):
             util_log_info("==={} xd:{}, xd_mark:{}===".format(code, last_min_sig['xd'], last_min_sig['xd_mark']))
             continue
 
-        idx = 1
-
         try:
             dif = 0 if np.isnan(last_min_sig.get('dif')) else last_min_sig.get('dif')
             macd = 0 if np.isnan(last_min_sig.get('macd')) else last_min_sig.get('macd')
@@ -1165,19 +1163,18 @@ def calculate_bs_signals(security_df: pd.DataFrame, last_trade_date=None):
         except TypeError:
             util_log_info("{} {} has no macd value=======".format(code, exchange))
 
-        if code in ['IFL8', 'IFL9', 'RB2201', 'AG2107', 'OI2107', 'SS2106', 'RBL9']:
-            print('ok')
+        # if code in ['515120', '510310', '512500', '515380', '515390', '515800', '159905']:
+        #     print('ok')
 
-        while 'dif{}'.format(idx) in last_min_sig:
+        for idx in range(1, last_min_sig['xd']+1):
             dif = 0 if np.isnan(last_min_sig.get('dif{}'.format(idx))) else last_min_sig.get('dif{}'.format(idx))
             macd = 0 if np.isnan(last_min_sig.get('macd{}'.format(idx))) else last_min_sig.get('macd{}'.format(idx))
             last_min_sig.update(macd=last_min_sig.get('macd') + dif + macd)
-            idx = idx + 1
 
         for key in last_min_sig:
             last_day_sig[key + '_min'] = last_min_sig[key]
 
-        last_day_sig['start'] = start
+        # last_day_sig['start'] = start
 
         last_day_sig.update(amount=amount, code=code, exchange=exchange)
 
@@ -1308,9 +1305,9 @@ if __name__ == '__main__':
     # last_trade_date = pd.to_datetime('2021-02-02')
     last_trade_date = None
     main_signal(
-        security_blocks=['future'],
-        # security_blocks=['future', 'stock', 'convertible', 'ETF', 'index'],
-        # security_blocks=['hkconnect'],
+        # security_blocks=['future'],
+        # security_blocks=['hkconnect', 'stock', 'convertible', 'ETF', 'index'],
+        security_blocks=['ETF'],
         # security_blocks=['stock'],
         last_trade_date=last_trade_date
     )
