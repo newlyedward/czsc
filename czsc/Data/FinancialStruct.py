@@ -213,7 +213,7 @@ class FinancialStruct:
             df = self.data
             self.financial_factor['netProfitCashRatio'] = df['cashFlowRateAndNetProfitRatioOfOperatingActivities']
 
-        return self.financial_factor['netProfitCashRatio']
+        return np.abs(self.financial_factor['netProfitCashRatio']) * np.sign(self.financial_factor['netCashFlowsFromOperatingActivitie'])
 
     @property
     def operatingIncomeGrowth(self):
